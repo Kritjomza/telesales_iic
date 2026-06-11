@@ -255,16 +255,15 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, showT
       <main className="content animate-fade-in">
         <div className="panel">
           <div className="filter-band">
-            <label style={{ gridColumn: "span 5" }}>
+            <label className="filter-search">
               <span>Search inside {getTableTitle().toLowerCase()}</span>
-              <div className="search-field" style={{ border: "1px solid #dde4ee", padding: "0 10px", borderRadius: "8px", background: "#fff", display: "flex", alignItems: "center" }}>
-                <Search size={16} style={{ color: "gray", marginRight: "8px" }} />
+              <div className="search-field">
+                <Search size={16} aria-hidden="true" />
                 <input
                   type="text"
                   placeholder="Search..."
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  style={{ border: "0", outline: "0", height: "40px", width: "100%" }}
                   aria-label="Filter database"
                 />
               </div>
@@ -333,7 +332,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, showT
                 {tableType === "users" && (
                   <tr>
                     <th style={{ width: "5%" }}>No.</th>
-                    <th style={{ width: "15%" }}>Product</th>
+                    <th style={{ width: "15%" }}>User</th>
                     <th style={{ width: "15%" }}>Role</th>
                     <th style={{ width: "20%" }}>Email</th>
                     <th style={{ width: "15%" }}>Tel</th>
@@ -417,7 +416,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, showT
                           <td>{item.id}</td>
                           <td>
                             <strong>{item.name}</strong>
-                            <span className="subtext" style={{ display: "block", fontSize: "11px", color: "gray" }}>({item.username})</span>
+                            <span className="subtext">({item.username})</span>
                           </td>
                           <td>
                             <span className={`status-badge info`}>{item.roles}</span>
@@ -438,20 +437,18 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, showT
                         </>
                       )}
 
-                      <td style={{ textAlign: "right" }}>
-                        <div className="row-actions">
-                          {tableType != "users" && (
-                            <>
-                              <button onClick={() => { setActiveItem(item); setIsOpen(true); }} aria-label="Edit record" type="button">
-                                <Pencil size={13} />
-                              </button>
-                              <button className="delete-btn" onClick={() => handleDelete(item.id)} aria-label="Delete record" type="button">
-                                <Trash2 size={13} />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
+                      {tableType !== "users" && (
+                        <td style={{ textAlign: "right" }}>
+                          <div className="row-actions">
+                            <button onClick={() => { setActiveItem(item); setIsOpen(true); }} aria-label="Edit record" type="button">
+                              <Pencil size={13} />
+                            </button>
+                            <button className="delete-btn" onClick={() => handleDelete(item.id)} aria-label="Delete record" type="button">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))
                 ) : (

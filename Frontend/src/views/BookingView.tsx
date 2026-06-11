@@ -3,6 +3,7 @@ import { Search, Bookmark, Pencil } from "lucide-react";
 import { apiService } from "../domain/apiService";
 import type { Customer, User, Category } from "../domain/types";
 import { Drawer } from "../components/Drawer";
+import { canManageAssignments, normalizeRole } from "../domain/permissions";
 
 interface BookingViewProps {
   userRole: string;
@@ -30,7 +31,7 @@ export const BookingView: React.FC<BookingViewProps> = ({ userRole, showToast })
       setIsLoading(true);
       const [custs, uList, btList] = await Promise.all([
         apiService.getCustomers(),
-        apiService.getUsers(),
+        canManageAssignments(userRole) ? apiService.getUsers() : Promise.resolve([]),
         apiService.getBusinessTypes()
       ]);
       setCustomers(custs);
@@ -65,9 +66,9 @@ export const BookingView: React.FC<BookingViewProps> = ({ userRole, showToast })
     });
   }, [customers, query, businessType, saleFilter, telesaleFilter]);
 
-  const getUserName = (id: number | null) => {
+  const getUserName = (id: number | null, fallback?: string | null) => {
     if (!id) return "Not assigned";
-    return users.find(u => u.id === id)?.name || "Unknown";
+    return users.find(u => u.id === id)?.name || fallback || "Assigned";
   };
 
   const handleBook = async (c: Customer) => {
@@ -111,9 +112,10 @@ export const BookingView: React.FC<BookingViewProps> = ({ userRole, showToast })
   const canBook = (c: Customer) => {
     if (!c.is_active) return false;
     
-    if (userRole === "Tele sale") {
+    const role = normalizeRole(userRole);
+    if (role === "Tele Sale") {
       if (c.status === "Booking" && c.telesale_id !== null) return false;
-    } else if (userRole === "Sale") {
+    } else if (role === "Sale") {
       if (c.status === "Booking" && c.sale_id !== null) return false;
     }
 
@@ -214,23 +216,22 @@ export const BookingView: React.FC<BookingViewProps> = ({ userRole, showToast })
                         <span className="subtext">{c.address}</span>
                       </td>
                       <td>{c.bt_type}</td>
-                      <td>{getUserName(c.sale_id)}</td>
-                      <td>{getUserName(c.telesale_id)}</td>
+                      <td>{getUserName(c.sale_id, c.sale)}</td>
+                      <td>{getUserName(c.telesale_id, c.telesale)}</td>
                       <td>
                         <span className={`status-badge ${c.is_active ? c.status.toLowerCase() : "neutral"}`}>
                           {c.is_active ? c.status : "Inactive"}
                         </span>
                       </td>
                       <td style={{ textAlign: "right" }}>
-                        <div className="row-actions" style={{ justifyContent: "flex-end" }}>
+                        <div className="row-actions">
                           {canBook(c) && (
                             <button
                               className="action-pill blue"
                               onClick={() => handleBook(c)}
                               type="button"
-                              style={{ display: "inline-flex", gap: "4px" }}
                             >
-                              <Bookmark size={12} />
+                              <Bookmark size={12} aria-hidden="true" />
                               Book
                             </button>
                           )}

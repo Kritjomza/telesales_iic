@@ -3,6 +3,7 @@ import { Plus, Check, X, ArrowLeft, Download, Send } from "lucide-react";
 import { apiService } from "../domain/apiService";
 import type { CostSheet, Customer, Brand, Product } from "../domain/types";
 import { ForbiddenView } from "./ForbiddenView";
+import { isAdminRole } from "../domain/permissions";
 
 interface CostSheetViewProps {
   userRole: string;
@@ -12,6 +13,7 @@ interface CostSheetViewProps {
 type Mode = "list" | "create" | "preview";
 
 export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToast }) => {
+  const isAdmin = isAdminRole(userRole);
   const [mode, setMode] = useState<Mode>("list");
   const [costSheets, setCostSheets] = useState<CostSheet[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -247,7 +249,7 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
                             <td>{item.project_name}</td>
                             <td>{netSale.toLocaleString()} THB</td>
                             <td>
-                              <span className="margin-text font-bold" style={{ color: item.gp_percent > 25 ? "green" : "orange" }}>
+                              <span className={item.gp_percent > 25 ? "text-success-strong" : "text-warning-strong"}>
                                 {item.gp_percent}%
                               </span>
                             </td>
@@ -257,7 +259,7 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
                               </span>
                             </td>
                             <td style={{ textAlign: "right" }}>
-                              <div className="row-actions" style={{ justifyContent: "flex-end" }}>
+                              <div className="row-actions">
                                 <button
                                   className="action-pill blue"
                                   onClick={() => {
@@ -308,7 +310,7 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
 
           <main className="content animate-fade-in">
             <form onSubmit={handleSave} className="corporate-form cost-sheet-form">
-              <div className="panel" style={{ padding: "24px" }}>
+              <div className="panel panel-padded">
                 <div className="form-grid-2">
                   <div className="form-group">
                     <label htmlFor="cust_id_cs">Customer *</label>
@@ -448,7 +450,7 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
               </div>
 
               {/* LIVE CALCULATIONS BOX */}
-              <div className="panel cost-sheet-summary-panel animate-fade-in" style={{ marginTop: "20px", padding: "20px", background: "#f8fafc" }}>
+              <div className="panel cost-sheet-summary-panel animate-fade-in">
                 <h3>Margin & Share Calculation Summary</h3>
                 <div className="calc-summary-grid">
                   <div className="calc-item">
@@ -509,13 +511,13 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
                 <Send size={15} />
                 Send Mail
               </button>
-              {(userRole === "Admin" || userRole === "Super Admin") && selectedCostSheet.status === "Pending" && (
+              {isAdmin && selectedCostSheet.status === "Pending" && (
                 <>
-                  <button className="primary-button bg-success" onClick={() => handleUpdateStatus(selectedCostSheet.id, "Approved")} type="button" style={{ background: "green", border: "0" }}>
+                  <button className="primary-button success-button" onClick={() => handleUpdateStatus(selectedCostSheet.id, "Approved")} type="button">
                     <Check size={15} />
                     Approve
                   </button>
-                  <button className="primary-button bg-danger" onClick={() => handleUpdateStatus(selectedCostSheet.id, "Rejected")} type="button" style={{ background: "red", border: "0" }}>
+                  <button className="primary-button danger-button" onClick={() => handleUpdateStatus(selectedCostSheet.id, "Rejected")} type="button">
                     <X size={15} />
                     Reject
                   </button>

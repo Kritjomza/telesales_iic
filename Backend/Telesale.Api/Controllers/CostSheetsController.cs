@@ -27,31 +27,9 @@ public class CostSheetsController : ControllerBase
         var userId = User.GetUserId();
         if (userId == null) return Unauthorized();
 
-        var role = User.GetUserRole();
-        var position = User.GetUserPosition();
+        if (!User.CanReadManagementData()) return Forbid();
 
-        IQueryable<customer> customerQuery = _db.customers;
-
-        if (role == "Admin" || role == "Super Admin")
-        {
-            // Allowed to see all
-        }
-        else if (role == "Manager" || role == "Supervisor")
-        {
-            customerQuery = customerQuery.Where(c => 
-                (c.sale_id != null && _db.users.Any(u => u.id == c.sale_id && u.position == position && u.position != null && u.position != "")) ||
-                (c.telesale_id != null && _db.users.Any(u => u.id == c.telesale_id && u.position == position && u.position != null && u.position != "")) ||
-                c.owner_id == (int)userId.Value
-            );
-        }
-        else if (role == "Sale" || role == "Tele Sale" || role == "Tele sale")
-        {
-            customerQuery = customerQuery.Where(c => 
-                c.sale_id == (int)userId.Value || 
-                c.telesale_id == (int)userId.Value || 
-                c.owner_id == (int)userId.Value
-            );
-        }
+        IQueryable<customer> customerQuery = _db.customers.ApplyCustomerScope(User, _db);
 
         var permittedCustomers = await customerQuery.AsNoTracking().Select(c => new { c.id, c.name }).ToListAsync(cancellationToken);
         var permittedCustIds = permittedCustomers.Select(c => (int)c.id).ToHashSet();
@@ -59,7 +37,7 @@ public class CostSheetsController : ControllerBase
 
         var dbSheets = await _db.cost_sheets.AsNoTracking().ToListAsync(cancellationToken);
 
-        if (role != "Admin" && role != "Super Admin" && role != "Viewer")
+        if (!User.IsAdmin() && !User.IsViewer())
         {
             dbSheets = dbSheets.Where(cs =>
             {
@@ -103,8 +81,7 @@ public class CostSheetsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateCostSheet([FromBody] CostSheetCreateDto dto, CancellationToken cancellationToken)
     {
-        var role = User.GetUserRole();
-        if (role == "Viewer") return Forbid();
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
 
         var cust = await _db.customers.FindAsync(new object[] { (uint)dto.cust_id }, cancellationToken);
         if (cust == null)
@@ -112,27 +89,9 @@ public class CostSheetsController : ControllerBase
             return User.IsAdmin() ? NotFound() : Forbid();
         }
 
-        if (!User.IsAdmin())
+        if (!await User.HasCustomerAccessAsync(cust, _db, cancellationToken))
         {
-            var userId = User.GetUserId();
-            var position = User.GetUserPosition();
-            bool hasAccess = false;
-
-            if (role == "Manager" || role == "Supervisor")
-            {
-                hasAccess = cust.owner_id == (int)userId.Value || 
-                            (cust.sale_id != null && await _db.users.AnyAsync(u => u.id == cust.sale_id && u.position == position, cancellationToken)) ||
-                            (cust.telesale_id != null && await _db.users.AnyAsync(u => u.id == cust.telesale_id && u.position == position, cancellationToken));
-            }
-            else if (role == "Sale" || role == "Tele Sale" || role == "Tele sale")
-            {
-                hasAccess = cust.sale_id == (int)userId.Value || cust.telesale_id == (int)userId.Value || cust.owner_id == (int)userId.Value;
-            }
-
-            if (!hasAccess)
-            {
-                return Forbid();
-            }
+            return Forbid();
         }
 
         var brand = await _db.brands.FindAsync(new object[] { (uint)dto.brand_id }, cancellationToken);
@@ -183,8 +142,7 @@ public class CostSheetsController : ControllerBase
     [HttpPut("{id}/status")]
     public async Task<IActionResult> UpdateStatus(uint id, [FromBody] CostSheetStatusUpdateDto dto, CancellationToken cancellationToken)
     {
-        var role = User.GetUserRole();
-        if (role == "Viewer" || role == "Sale" || role == "Tele Sale" || role == "Tele sale")
+        if (!User.CanManageAssignments())
         {
             return Forbid();
         }
@@ -195,7 +153,7 @@ public class CostSheetsController : ControllerBase
             return User.IsAdmin() ? NotFound() : Forbid();
         }
 
-        if (role == "Manager" || role == "Supervisor")
+        if (User.IsSupervisor())
         {
             int custId = 0;
             if (!string.IsNullOrEmpty(cs.details))
@@ -223,13 +181,7 @@ public class CostSheetsController : ControllerBase
                 return Forbid();
             }
 
-            var userId = User.GetUserId();
-            var position = User.GetUserPosition();
-            bool hasAccess = cust.owner_id == (int)userId.Value || 
-                            (cust.sale_id != null && await _db.users.AnyAsync(u => u.id == cust.sale_id && u.position == position, cancellationToken)) ||
-                            (cust.telesale_id != null && await _db.users.AnyAsync(u => u.id == cust.telesale_id && u.position == position, cancellationToken));
-
-            if (!hasAccess)
+            if (!await User.HasCustomerAccessAsync(cust, _db, cancellationToken))
             {
                 return Forbid();
             }
@@ -249,8 +201,7 @@ public class CostSheetsController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCostSheet(uint id, CancellationToken cancellationToken)
     {
-        var role = User.GetUserRole();
-        if (role == "Viewer" || role == "Sale" || role == "Tele Sale" || role == "Tele sale")
+        if (!User.CanManageAssignments())
         {
             return Forbid();
         }
@@ -261,7 +212,7 @@ public class CostSheetsController : ControllerBase
             return User.IsAdmin() ? NotFound() : Forbid();
         }
 
-        if (role == "Manager" || role == "Supervisor")
+        if (User.IsSupervisor())
         {
             int custId = 0;
             if (!string.IsNullOrEmpty(cs.details))
@@ -289,13 +240,7 @@ public class CostSheetsController : ControllerBase
                 return Forbid();
             }
 
-            var userId = User.GetUserId();
-            var position = User.GetUserPosition();
-            bool hasAccess = cust.owner_id == (int)userId.Value || 
-                            (cust.sale_id != null && await _db.users.AnyAsync(u => u.id == cust.sale_id && u.position == position, cancellationToken)) ||
-                            (cust.telesale_id != null && await _db.users.AnyAsync(u => u.id == cust.telesale_id && u.position == position, cancellationToken));
-
-            if (!hasAccess)
+            if (!await User.HasCustomerAccessAsync(cust, _db, cancellationToken))
             {
                 return Forbid();
             }

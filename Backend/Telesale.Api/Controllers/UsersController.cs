@@ -21,8 +21,7 @@ public class UsersController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetUsers(CancellationToken cancellationToken)
     {
-        var role = User.GetUserRole();
-        if (role == "Sale" || role == "Tele Sale" || role == "Tele sale" || role == "Viewer")
+        if (!User.CanManageAssignments())
         {
             return Forbid();
         }
@@ -31,7 +30,7 @@ public class UsersController : ControllerBase
         IQueryable<Telesale.Api.Models.user> query = _db.users.AsNoTracking()
             .Where(u => u.is_active == null || u.is_active == true);
 
-        if (role == "Manager" || role == "Supervisor")
+        if (User.IsSupervisor())
         {
             query = query.Where(u => u.position == position && !string.IsNullOrEmpty(position));
         }

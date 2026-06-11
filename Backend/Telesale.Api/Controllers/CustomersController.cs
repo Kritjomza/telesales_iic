@@ -33,31 +33,9 @@ public class CustomersController : ControllerBase
         var userId = User.GetUserId();
         if (userId == null) return Unauthorized();
 
-        var role = User.GetUserRole();
-        var position = User.GetUserPosition();
+        if (!User.CanReadManagementData()) return Forbid();
 
-        IQueryable<customer> query = _db.customers;
-
-        if (role == "Admin" || role == "Super Admin")
-        {
-            // Admin sees all
-        }
-        else if (role == "Manager" || role == "Supervisor")
-        {
-            query = query.Where(c => 
-                (c.sale_id != null && _db.users.Any(u => u.id == c.sale_id && u.position == position && u.position != null && u.position != "")) ||
-                (c.telesale_id != null && _db.users.Any(u => u.id == c.telesale_id && u.position == position && u.position != null && u.position != "")) ||
-                c.owner_id == (int)userId.Value
-            );
-        }
-        else if (role == "Sale" || role == "Tele Sale" || role == "Tele sale")
-        {
-            query = query.Where(c => 
-                c.sale_id == (int)userId.Value || 
-                c.telesale_id == (int)userId.Value || 
-                c.owner_id == (int)userId.Value
-            );
-        }
+        IQueryable<customer> query = _db.customers.ApplyCustomerScope(User, _db);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -180,7 +158,7 @@ public class CustomersController : ControllerBase
         if (userId == null) return Unauthorized();
 
         var role = User.GetUserRole();
-        if (role == "Viewer")
+        if (!User.CanWriteCustomerWorkflow())
         {
             return Forbid();
         }
@@ -205,13 +183,13 @@ public class CustomersController : ControllerBase
             owner_id = (int?)userId.Value
         };
 
-        if (role == "Sale")
+        if (role == AppRoles.Sale)
         {
             c.sale_id = (int?)userId.Value;
             c.is_assign_sale = true;
             c.status = "Assigned";
         }
-        else if (role == "Tele Sale" || role == "Tele sale")
+        else if (role == AppRoles.TeleSale)
         {
             c.telesale_id = (int?)userId.Value;
             c.is_assign_telesale = true;
@@ -227,7 +205,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> UpdateCustomer(uint id, [FromBody] CustomerUpdateDto dto, CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (role == "Viewer") return Forbid();
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
 
         var c = await _db.customers.FindAsync(new object[] { id }, cancellationToken);
         if (c == null)
@@ -266,7 +244,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> DeleteCustomer(uint id, CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (role == "Viewer" || role == "Sale" || role == "Tele Sale" || role == "Tele sale")
+        if (!User.CanManageAssignments())
         {
             return Forbid();
         }
@@ -291,9 +269,15 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> AssignCustomer(uint id, [FromBody] CustomerAssignDto dto, CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (role == "Viewer" || role == "Sale" || role == "Tele Sale" || role == "Tele sale")
+        if (!User.CanManageAssignments())
         {
             return Forbid();
+        }
+
+        dto.role = AppRoles.Normalize(dto.role);
+        if (dto.role != AppRoles.Sale && dto.role != AppRoles.TeleSale)
+        {
+            return BadRequest(new { message = "Assignment role must be Sale or Tele Sale." });
         }
 
         var c = await _db.customers.FindAsync(new object[] { id }, cancellationToken);
@@ -307,26 +291,48 @@ public class CustomersController : ControllerBase
             return Forbid();
         }
 
-        if (role == "Manager" || role == "Supervisor")
+        if (User.IsSupervisor())
         {
             if (dto.userId > 0)
             {
                 var position = User.GetUserPosition();
-                var targetUserInTeam = await _db.users.AnyAsync(u => u.id == dto.userId && u.position == position, cancellationToken);
+                var targetUserInTeam = await _db.users.AnyAsync(
+                    u => u.id == dto.userId &&
+                         u.position == position &&
+                         (dto.role == AppRoles.Sale
+                             ? u.roles == AppRoles.Sale
+                             : (u.roles == AppRoles.TeleSale || u.roles == "Tele sale")),
+                    cancellationToken);
                 if (!targetUserInTeam)
                 {
                     return Forbid();
                 }
             }
         }
+        else if (dto.userId > 0)
+        {
+            var targetUserExists = await _db.users.AnyAsync(
+                u => u.id == dto.userId &&
+                     (u.is_active == null || u.is_active == true) &&
+                     (dto.role == AppRoles.Sale
+                         ? u.roles == AppRoles.Sale
+                         : (u.roles == AppRoles.TeleSale || u.roles == "Tele sale")),
+                cancellationToken);
+            if (!targetUserExists)
+            {
+                return BadRequest(new { message = "Invalid assignment target for the selected role." });
+            }
+        }
 
-        if (dto.role == "Sale")
+        if (dto.role == AppRoles.Sale)
         {
             c.sale_id = dto.userId == 0 ? null : dto.userId;
+            c.is_assign_sale = dto.userId != 0;
         }
         else
         {
             c.telesale_id = dto.userId == 0 ? null : dto.userId;
+            c.is_assign_telesale = dto.userId != 0;
         }
 
         if (c.status == "New" && (c.sale_id.HasValue || c.telesale_id.HasValue))
@@ -343,7 +349,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> BookCustomer(uint id, CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (role == "Viewer") return Forbid();
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
 
         var c = await _db.customers.FindAsync(new object[] { id }, cancellationToken);
         if (c == null)
@@ -399,7 +405,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> AddContact(uint id, [FromBody] ContactCreateDto dto, CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (role == "Viewer") return Forbid();
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
 
         var c = await _db.customers.FindAsync(new object[] { id }, cancellationToken);
         if (c == null)
@@ -444,7 +450,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> UpdateContact(uint id, [FromBody] ContactUpdateDto dto, CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (role == "Viewer") return Forbid();
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
 
         var d = await _db.details.FindAsync(new object[] { id }, cancellationToken);
         if (d == null)
@@ -482,7 +488,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> DeleteContact(uint id, CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (role == "Viewer") return Forbid();
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
 
         var d = await _db.details.FindAsync(new object[] { id }, cancellationToken);
         if (d == null)
@@ -551,7 +557,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> AddDevice(uint contactId, [FromBody] DeviceCreateDto dto, CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (role == "Viewer") return Forbid();
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
 
         var d = await _db.details.FindAsync(new object[] { contactId }, cancellationToken);
         if (d == null)
@@ -615,7 +621,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> UpdateDevice(uint id, [FromBody] DeviceUpdateDto dto, CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (role == "Viewer") return Forbid();
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
 
         var dd = await _db.detail_devices.FindAsync(new object[] { id }, cancellationToken);
         if (dd == null)
@@ -686,7 +692,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> DeleteDevice(uint id, CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (role == "Viewer") return Forbid();
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
 
         var dd = await _db.detail_devices.FindAsync(new object[] { id }, cancellationToken);
         if (dd == null)
@@ -747,7 +753,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> AddProject(uint contactId, [FromBody] ProjectCreateDto dto, CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (role == "Viewer") return Forbid();
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
 
         var d = await _db.details.FindAsync(new object[] { contactId }, cancellationToken);
         if (d == null)
@@ -790,8 +796,7 @@ public class CustomersController : ControllerBase
     [HttpPut("projects/{id}")]
     public async Task<IActionResult> UpdateProject(uint id, [FromBody] ProjectUpdateDto dto, CancellationToken cancellationToken)
     {
-        var role = User.GetUserRole();
-        if (role == "Viewer") return Forbid();
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
 
         var dp = await _db.detail_pjs.FindAsync(new object[] { id }, cancellationToken);
         if (dp == null)
@@ -832,8 +837,7 @@ public class CustomersController : ControllerBase
     [HttpDelete("projects/{id}")]
     public async Task<IActionResult> DeleteProject(uint id, CancellationToken cancellationToken)
     {
-        var role = User.GetUserRole();
-        if (role == "Viewer") return Forbid();
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
 
         var dp = await _db.detail_pjs.FindAsync(new object[] { id }, cancellationToken);
         if (dp == null)
@@ -863,7 +867,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> GetReportsAll(CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (role == "Sale" || role == "Tele Sale" || role == "Tele sale")
+        if (!User.CanReadReports())
         {
             return Forbid();
         }
@@ -873,18 +877,12 @@ public class CustomersController : ControllerBase
         IQueryable<user> usersQuery = _db.users.AsNoTracking().Where(u => u.is_active == null || u.is_active == true);
         IQueryable<customer> customersQuery = _db.customers.AsNoTracking();
 
-        if (role == "Manager" || role == "Supervisor")
+        if (User.IsSupervisor())
         {
             var position = User.GetUserPosition();
-            var userId = (int?)User.GetUserId();
-
             usersQuery = usersQuery.Where(u => u.position == position && !string.IsNullOrEmpty(position));
-            customersQuery = customersQuery.Where(c => 
-                (c.sale_id != null && _db.users.Any(u => u.id == c.sale_id && u.position == position && u.position != null && u.position != "")) ||
-                (c.telesale_id != null && _db.users.Any(u => u.id == c.telesale_id && u.position == position && u.position != null && u.position != "")) ||
-                c.owner_id == userId
-            );
         }
+        customersQuery = customersQuery.ApplyCustomerScope(User, _db);
 
         var customers = await customersQuery.ToListAsync(cancellationToken);
         var users = await usersQuery.ToListAsync(cancellationToken);
@@ -943,10 +941,11 @@ public class CustomersController : ControllerBase
         }
 
         var agentPerformance = new List<object>();
-        var activeAgents = users.Where(u => u.roles == "Sale" || u.roles == "Tele sale");
+        var activeAgents = users.Where(u => AppRoles.IsAgentRole(AppRoles.Normalize(u.roles)));
         foreach (var agent in activeAgents)
         {
-            var assignedCusts = customers.Where(c => agent.roles == "Sale" ? c.sale_id == agent.id : c.telesale_id == agent.id).ToList();
+            var agentRole = AppRoles.Normalize(agent.roles);
+            var assignedCusts = customers.Where(c => agentRole == AppRoles.Sale ? c.sale_id == agent.id : c.telesale_id == agent.id).ToList();
             
             int totalPoints = 0;
             foreach (var c in assignedCusts)
@@ -1053,40 +1052,7 @@ public class CustomersController : ControllerBase
 
     private async Task<bool> HasCustomerAccess(customer c, CancellationToken cancellationToken = default)
     {
-        var userId = User.GetUserId();
-        if (userId == null) return false;
-
-        var role = User.GetUserRole();
-        if (role == "Admin" || role == "Super Admin" || role == "Viewer")
-        {
-            return true;
-        }
-
-        if (role == "Manager" || role == "Supervisor")
-        {
-            if (c.owner_id == (int)userId.Value) return true;
-
-            var position = User.GetUserPosition();
-            if (string.IsNullOrEmpty(position)) return false;
-
-            if (c.sale_id != null && await _db.users.AnyAsync(u => u.id == c.sale_id && u.position == position, cancellationToken))
-            {
-                return true;
-            }
-            if (c.telesale_id != null && await _db.users.AnyAsync(u => u.id == c.telesale_id && u.position == position, cancellationToken))
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        if (role == "Sale" || role == "Tele Sale" || role == "Tele sale")
-        {
-            return c.sale_id == (int)userId.Value || c.telesale_id == (int)userId.Value || c.owner_id == (int)userId.Value;
-        }
-
-        return false;
+        return await User.HasCustomerAccessAsync(c, _db, cancellationToken);
     }
 }
 

@@ -104,7 +104,7 @@ export const ReportsView: React.FC = () => {
       </header>
 
       {/* Sub-tab navigation */}
-      <div className="reports-tab-nav" style={{ padding: "0 28px", borderBottom: "1px solid #dde4ee", background: "#fff", display: "flex", gap: "24px" }}>
+      <div className="reports-tab-nav">
         <button 
           className={`report-tab-btn ${activeTab === "operation" ? "active" : ""}`}
           onClick={() => setActiveTab("operation")}
@@ -268,17 +268,15 @@ export const ReportsView: React.FC = () => {
                           <td>{item.wins} wins</td>
                           <td><strong>{item.points} points</strong></td>
                           <td>
-                            <div className="perf-bar-container" style={{ width: "100%", background: "#e2e8f0", borderRadius: "4px", height: "10px", position: "relative", overflow: "hidden" }}>
+                            <div className="perf-bar-container">
                               <div 
-                                className="perf-bar" 
+                                className={`perf-bar ${item.progress >= 100 ? "high" : item.progress > 50 ? "mid" : "low"}`}
                                 style={{ 
-                                  width: `${item.progress}%`, 
-                                  background: item.progress >= 100 ? "green" : item.progress > 50 ? "#2563eb" : "#f59e0b", 
-                                  height: "100%" 
+                                  width: `${item.progress}%`
                                 }} 
                               />
                             </div>
-                            <span style={{ fontSize: "11px", color: "gray" }}>{item.progress}% completed</span>
+                            <span className="subtext">{item.progress}% completed</span>
                           </td>
                         </tr>
                       ))}
@@ -291,27 +289,18 @@ export const ReportsView: React.FC = () => {
             {/* REPORT 4: SUMMARY RENEWAL */}
             {activeTab === "renewal" && (
               <div className="panel animate-fade-in">
-                <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div className="panel-header split">
                   <div>
                     <h2>Antivirus Licensing Renewal Monitor</h2>
                     <p>List of active client nodes whose licenses require immediate extension.</p>
                   </div>
-                  <div className="filter-pill-container" style={{ display: "flex", gap: "8px" }}>
+                  <div className="filter-pill-container">
                     {[30, 60, 90].map(days => (
                       <button 
                         key={days} 
                         className={`filter-pill ${renewalFilterDays === days ? "active" : ""}`}
                         onClick={() => setRenewalFilterDays(days)}
                         type="button"
-                        style={{ 
-                          padding: "6px 12px", 
-                          borderRadius: "20px", 
-                          border: "1px solid #dde4ee", 
-                          background: renewalFilterDays === days ? "#2563eb" : "#fff",
-                          color: renewalFilterDays === days ? "#fff" : "#333",
-                          fontSize: "12px",
-                          cursor: "pointer"
-                        }}
                       >
                         {days} Days
                       </button>
@@ -333,12 +322,12 @@ export const ReportsView: React.FC = () => {
                     <tbody>
                       {renewalSummary.length > 0 ? (
                         renewalSummary.map((item, index) => (
-                          <tr key={item.id} style={{ background: item.renewalDays <= 15 ? "#fee2e2" : "none" }}>
+                          <tr key={item.id} className={item.renewalDays <= 15 ? "urgent-row" : ""}>
                             <td>{index + 1}</td>
                             <td><strong>{item.name}</strong></td>
                             <td>{item.business}</td>
                             <td>
-                              <strong style={{ color: item.renewalDays <= 15 ? "red" : "orange" }}>
+                              <strong className={item.renewalDays <= 15 ? "text-danger-strong" : "text-warning-strong"}>
                                 {item.renewalDays} days
                               </strong>
                             </td>
@@ -387,7 +376,7 @@ export const ReportsView: React.FC = () => {
                             <td><strong>{item.customerName}</strong></td>
                             <td>{item.contactName}</td>
                             <td>
-                              <span style={{ fontSize: "11px", display: "inline-block", background: item.type === "Project" ? "#dbeafe" : "#ccfbf1", color: item.type === "Project" ? "#1e3a8a" : "#0f766e", padding: "2px 6px", borderRadius: "4px", marginBottom: "4px" }}>
+                              <span className={`record-type-badge ${item.type === "Project" ? "project" : "license"}`}>
                                 {item.type}
                               </span>
                               <strong style={{ display: "block" }}>{item.details}</strong>

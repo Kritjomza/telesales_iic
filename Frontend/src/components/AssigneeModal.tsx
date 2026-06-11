@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Search, UserCheck } from "lucide-react";
 import { Modal } from "./Modal";
 import { type User } from "../domain/types";
+import { normalizeRole } from "../domain/permissions";
 
 interface AssigneeModalProps {
   isOpen: boolean;
@@ -15,9 +16,8 @@ interface AssigneeModalProps {
 export const AssigneeModal: React.FC<AssigneeModalProps> = ({ isOpen, role, onClose, onAssign, customerName, users }) => {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const staffList = users.filter(
-    (u) => u.roles === role || (role === "Tele sale" && u.roles === "Tele sale")
-  );
+  const targetRole = normalizeRole(role);
+  const staffList = users.filter((u) => normalizeRole(u.roles) === targetRole);
 
   const filteredStaff = staffList.filter((u) =>
     u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -38,7 +38,7 @@ export const AssigneeModal: React.FC<AssigneeModalProps> = ({ isOpen, role, onCl
           />
         </div>
 
-        <div className="table-wrap" style={{ maxHeight: "300px", overflowY: "auto", marginTop: "12px" }}>
+        <div className="table-wrap table-scroll-sm" style={{ marginTop: "12px" }}>
           <table className="modal-table" aria-label="Staff selection table">
             <thead>
               <tr>
@@ -64,13 +64,12 @@ export const AssigneeModal: React.FC<AssigneeModalProps> = ({ isOpen, role, onCl
                       <button
                         className="primary-button btn-xs"
                         onClick={() => {
-                          onAssign(u.id);
-                          onClose();
-                        }}
-                        type="button"
-                        style={{ padding: "6px 10px", minHeight: "auto", borderRadius: "6px" }}
-                      >
-                        <UserCheck size={13} style={{ marginRight: "4px" }} />
+                        onAssign(u.id);
+                        onClose();
+                      }}
+                      type="button"
+                    >
+                        <UserCheck size={13} aria-hidden="true" />
                         Assign
                       </button>
                     </td>

@@ -12,8 +12,8 @@ public class AdminWriteOnlyAttribute : ActionFilterAttribute
         if (method != "GET" && method != "HEAD" && method != "OPTIONS")
         {
             var user = context.HttpContext.User;
-            var role = user.FindFirst(ClaimTypes.Role)?.Value;
-            if (role != "Admin" && role != "Super Admin")
+            var role = AppRoles.Normalize(user.FindFirst(ClaimTypes.Role)?.Value);
+            if (!AppRoles.IsAdminRole(role))
             {
                 context.Result = new ForbidResult();
             }

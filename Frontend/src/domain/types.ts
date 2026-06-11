@@ -3,7 +3,7 @@ export interface User {
   username: string;
   name: string;
   email: string;
-  roles: "Admin" | "Super Admin" | "Sale" | "Tele sale";
+  roles: "Admin" | "Super Admin" | "Manager" | "Supervisor" | "Sale" | "Tele Sale" | "Tele sale" | "Viewer";
   tel?: string;
   position?: string;
   linetoken?: string;
@@ -15,7 +15,9 @@ export interface Customer {
   address: string;
   capital?: string;
   telesale_id: number | null;
+  telesale?: string | null;
   sale_id: number | null;
+  sale?: string | null;
   status: string;
   is_active: boolean;
   start_dt: string | null;

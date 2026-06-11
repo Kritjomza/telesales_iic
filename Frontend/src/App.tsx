@@ -18,6 +18,7 @@ import { ReportsView } from "./views/ReportsView";
 import { MasterDataView, type MasterTableType } from "./views/MasterDataView";
 import { LoginView } from "./views/LoginView";
 import { ForbiddenView } from "./views/ForbiddenView";
+import { canAccessGroup, canAccessView } from "./domain/permissions";
 
 const navigationGroups = [
   {
@@ -190,46 +191,6 @@ function App() {
       </div>
     );
   }
-
-  const canAccessGroup = (groupLabel: string, role: string) => {
-    const isAdmin = role === "Admin" || role === "Super Admin";
-    const isSupervisor = role === "Manager" || role === "Supervisor";
-    const isAgent = role === "Sale" || role === "Tele sale" || role === "Tele Sale";
-    const isViewer = role === "Viewer";
-
-    if (groupLabel === "Master Data") {
-      return isAdmin;
-    }
-    if (groupLabel === "Customer") {
-      return isAdmin || isSupervisor || isAgent || isViewer;
-    }
-    if (groupLabel === "Report") {
-      return isAdmin || isSupervisor || isViewer;
-    }
-    if (groupLabel === "Sale Manager") {
-      return isAdmin || isSupervisor || isAgent;
-    }
-    return false;
-  };
-
-  const canAccessView = (viewKey: string, role: string) => {
-    if (viewKey === "forbidden") {
-      return true;
-    }
-    if (viewKey === "manage" || viewKey === "booking") {
-      return canAccessGroup("Customer", role);
-    }
-    if (viewKey === "cost-sheet") {
-      return canAccessGroup("Sale Manager", role);
-    }
-    if (viewKey === "reports") {
-      return canAccessGroup("Report", role);
-    }
-    if (viewKey === "master-data") {
-      return canAccessGroup("Master Data", role);
-    }
-    return false;
-  };
 
   return (
     <div className="app-shell">

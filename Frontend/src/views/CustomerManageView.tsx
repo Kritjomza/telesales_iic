@@ -8,6 +8,7 @@ import type { Customer, ContactDetail, DetailDevice, DetailProject, User, Catego
 import { Drawer } from "../components/Drawer";
 import { AssigneeModal } from "../components/AssigneeModal";
 import { ForbiddenView } from "./ForbiddenView";
+import { canManageAssignments, isAdminRole, isAgentRole, isSupervisorRole } from "../domain/permissions";
 
 interface CustomerManageViewProps {
   userRole: string;
@@ -21,9 +22,9 @@ type SubView =
   | { type: "projects"; contact: ContactDetail; customer: Customer };
 
 export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole, showToast }) => {
-  const isAdmin = userRole === "Admin" || userRole === "Super Admin";
-  const isSupervisor = userRole === "Manager" || userRole === "Supervisor";
-  const isAgent = userRole === "Sale" || userRole === "Tele sale" || userRole === "Tele Sale";
+  const isAdmin = isAdminRole(userRole);
+  const isSupervisor = isSupervisorRole(userRole);
+  const isAgent = isAgentRole(userRole);
 
   // Navigation inside Customer Workspace
   const [subView, setSubView] = useState<SubView>({ type: "list" });
@@ -79,7 +80,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
       setIsForbidden(false);
       const [custs, uList, btList, compList] = await Promise.all([
         apiService.getCustomers(),
-        apiService.getUsers(),
+        canManageAssignments(userRole) ? apiService.getUsers() : Promise.resolve([]),
         apiService.getBusinessTypes(),
         apiService.getCompetitors()
       ]);
@@ -150,9 +151,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
   };
 
   // Helper: Get Username by ID
-  const getUserName = (id: number | null) => {
+  const getUserName = (id: number | null, fallback?: string | null) => {
     if (!id) return "Not assigned";
-    return users.find(u => u.id === id)?.name || "Unknown";
+    return users.find(u => u.id === id)?.name || fallback || "Assigned";
   };
 
   // Actions: Customer CRUD
@@ -558,7 +559,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                     <option value="unassigned">Not assigned</option>
                   </select>
                 </label>
-                <div className="filter-actions" style={{ alignSelf: "end", display: "flex", gap: "8px" }}>
+                <div className="filter-actions">
                   <button className="primary-button" type="submit">
                     <Search size={16} />
                     Search
@@ -579,7 +580,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       <th style={{ width: "12%" }}>Start Date</th>
                       <th style={{ width: "10%" }}>Status</th>
                       <th style={{ width: "15%" }}>Business</th>
-                      {(userRole === "Admin" || userRole === "Super Admin") && (
+                      {isAdmin && (
                         <>
                           <th style={{ width: "11%" }}>Sale</th>
                           <th style={{ width: "11%" }}>Tele sale</th>
@@ -591,7 +592,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   <tbody>
                     {isLoading ? (
                       <tr>
-                        <td colSpan={userRole.includes("Admin") ? 9 : 7} style={{ textAlign: "center", padding: "32px 0" }}>
+                        <td colSpan={isAdmin ? 9 : 7} style={{ textAlign: "center", padding: "32px 0" }}>
                           Loading database customers...
                         </td>
                       </tr>
@@ -610,7 +611,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                             </span>
                           </td>
                           <td>
-                            {(!c.is_active && (userRole === "Admin" || userRole === "Super Admin")) ? (
+                            {(!c.is_active && isAdmin) ? (
                               <button 
                                 className="danger-action-btn" 
                                 onClick={() => handleToggleCustomerActive(c)}
@@ -622,7 +623,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                               c.bt_type
                             )}
                           </td>
-                          {(userRole === "Admin" || userRole === "Super Admin") && (
+                          {isAdmin && (
                             <>
                               <td>
                                 {c.status !== "Booking" ? (
@@ -669,7 +670,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                                       setIsLoading(false);
                                     }
                                   }}
-                                  title="Advance data"
+                                  aria-label={`Open advance data for ${c.name}`}
                                   type="button"
                                 >
                                   Advance
@@ -698,7 +699,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={userRole.includes("Admin") ? 9 : 7} style={{ textAlign: "center", padding: "32px 0" }}>
+                        <td colSpan={isAdmin ? 9 : 7} style={{ textAlign: "center", padding: "32px 0" }}>
                           No customers found.
                         </td>
                       </tr>
@@ -768,7 +769,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                           <td>{item.contact_tel} {item.contact_tel_office ? ` / ${item.contact_tel_office}` : ""}</td>
                           <td>
                             <span className="point-badge">{item.point} pts</span>
-                            <span className="total-point" style={{ display: "block", fontSize: "11px", color: "gray" }}>Total: {item.total_point}</span>
+                            <span className="subtext">Total: {item.total_point}</span>
                           </td>
                           <td style={{ textAlign: "right" }}>
                             <div className="row-actions">
@@ -788,7 +789,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                                 }}
                                 type="button"
                               >
-                                <Laptop size={12} style={{ marginRight: "4px" }} />
+                                <Laptop size={12} aria-hidden="true" />
                                 Device
                               </button>
                               <button
@@ -807,7 +808,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                                 }}
                                 type="button"
                               >
-                                <Target size={12} style={{ marginRight: "4px" }} />
+                                <Target size={12} aria-hidden="true" />
                                 Project
                               </button>
                               <button onClick={() => openContactDrawer(item)} aria-label="Edit contact" type="button">
@@ -1162,7 +1163,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
             {importPreviewRows.length > 0 && (
               <div className="import-preview-box">
                 <h4>Preview parsed data ({importPreviewRows.length} rows)</h4>
-                <div className="table-wrap" style={{ maxHeight: "250px", overflowY: "auto" }}>
+                <div className="table-wrap table-scroll-sm">
                   <table className="corporate-table compact" aria-label="Excel parsed row preview table">
                     <thead>
                       <tr>
@@ -1183,10 +1184,10 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   </table>
                 </div>
 
-                <div className="action-row" style={{ marginTop: "16px", display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                <div className="action-row" style={{ marginTop: "16px" }}>
                   <button className="ghost-button" onClick={() => setImportPreviewRows([])} type="button">Reset</button>
                   <button className="primary-button" onClick={handleCommitImport} type="button">
-                    <Check size={14} style={{ marginRight: "4px" }} />
+                    <Check size={14} aria-hidden="true" />
                     Commit Import
                   </button>
                 </div>
