@@ -1,0 +1,6 @@
+@Telesale.Api_HostAddress = http://localhost:5215
+
+GET {{Telesale.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

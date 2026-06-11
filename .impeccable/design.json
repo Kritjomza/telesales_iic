@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-10T12:53:34Z",
+  "title": "Design System: Telesale IIC Dashboard",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Deep Navy Slate", "canonical": "oklch(20% 0.03 240)", "tonalRamp": ["#020617", "#0f172a", "#1e293b", "#334155", "#475569", "#64748b", "#94a3b8", "#cbd5e1", "#e2e8f0", "#f1f5f9", "#f8fafc"] },
+      "primary-light": { "role": "primary", "displayName": "Slate Gray", "canonical": "oklch(27% 0.03 240)" },
+      "accent": { "role": "accent", "displayName": "Steel Blue Accent", "canonical": "oklch(40% 0.04 240)" },
+      "accent-light": { "role": "accent", "displayName": "Steel Ice Light", "canonical": "oklch(96% 0.01 240)" },
+      "surface": { "role": "neutral", "displayName": "Solid White", "canonical": "oklch(100% 0 0)" },
+      "surface-alt": { "role": "neutral", "displayName": "Cool Off-White", "canonical": "oklch(98% 0.005 240)" },
+      "border": { "role": "neutral", "displayName": "Border Slate", "canonical": "oklch(92% 0.01 240)" },
+      "text-muted": { "role": "neutral", "displayName": "Text Muted", "canonical": "oklch(50% 0.02 240)" },
+      "text-light": { "role": "neutral", "displayName": "Text Light", "canonical": "oklch(68% 0.02 240)" }
+    },
+    "typographyMeta": {
+      "body": { "displayName": "Body Font", "purpose": "Default body text, grid entries, form values." }
+    },
+    "shadows": [
+      { "name": "ambient-low", "value": "0 1px 3px 0 rgba(0, 0, 0, 0.05)", "purpose": "Subtle panel elevation." },
+      { "name": "active-overlay", "value": "0 10px 15px -3px rgba(0, 0, 0, 0.04)", "purpose": "Applied only to floating elements like drawers and modals." }
+    ],
+    "motion": [
+      { "name": "none", "value": "none", "purpose": "Motion is disabled by default to emphasize workflow speed." }
+    ],
+    "breakpoints": [
+      { "name": "md", "value": "768px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Standard high-contrast primary call-to-action button.",
+      "html": "<button class=\"ds-primary-button\">SAVE CHANGES</button>",
+      "css": ".ds-primary-button { background: #0f172a; border: 1px solid #0f172a; color: #fff; height: 38px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s; } .ds-primary-button:hover { background: #1e293b; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Secondary outline button for non-primary actions.",
+      "html": "<button class=\"ds-secondary-button\">CANCEL</button>",
+      "css": ".ds-secondary-button { background: #fff; border: 1px solid #e2e8f0; color: #0f172a; height: 38px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s; } .ds-secondary-button:hover { background: #f8fafc; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "description": "Subtle status pill indicating lead or workflow states.",
+      "html": "<span class=\"ds-status-badge ds-status-approved\">APPROVED</span>",
+      "css": ".ds-status-badge { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid #e2e8f0; background: transparent; } .ds-status-approved { border-color: #86efac; color: #15803d; background: #f0fdf4; }"
+    },
+    {
+      "name": "Text Input Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Standard keyboard-friendly text input field.",
+      "html": "<div class=\"ds-form-group\"><label class=\"ds-label\">LEAD NAME</label><input type=\"text\" class=\"ds-input\" placeholder=\"Enter lead name\" /></div>",
+      "css": ".ds-form-group { display: flex; flex-direction: column; gap: 6px; font-family: sans-serif; } .ds-label { font-size: 12px; font-weight: 700; color: #64748b; } .ds-input { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; outline: 0; background: #fff; height: 38px; } .ds-input:focus { border-color: #0f172a; box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.08); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Operations Console",
+    "overview": "A high-productivity, keyboard-friendly console for internal telesales agents, supervisors, and administrators. The visual environment is designed for long hours of reading and entering structured data. It rejects the visual clutter of modern consumer SaaS (excessive whitespace, glassmorphism, animated transitions, rounded cards) in favor of high contrast, dense grid layouts, crisp borders, and semantic color codes.",
+    "keyCharacteristics": [
+      "High Data Density: Small spacing, compact tables, and nested forms that maximize readable data on standard screen resolutions.",
+      "Strict Visual Restraint: Backgrounds are flat neutrals (white or slate-tinted off-white); borders are solid, light, and sharp; elevation is used sparingly.",
+      "Immediate Status Comprehension: Colored badges map directly to call/lead status values, ensuring immediate scannability of large lead lists."
+    ],
+    "rules": [
+      { "name": "The 10% Accent Rule", "body": "Accent and semantic colors are never used as decorative fills on large surfaces. They must be confined to small indicators (badges, pills, borders) and occupy less than 10% of any screen surface to keep status signals meaningful.", "section": "colors" },
+      { "name": "The No-Underline Rule", "body": "Text links and actionable items are never underlined at rest. They must indicate interactiveness via hover background fills and color changes.", "section": "typography" },
+      { "name": "The Flat-Rest Rule", "body": "Buttons, cards, and inputs are flat at rest. Physical shadows are reserved for floating overlays (drawers, modals) that escape the current grid context.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do align all text fields and inputs to the vertical grid.",
+      "Do use uppercase and spaced labels for table column headers to emphasize data structures.",
+      "Do ensure status badges have at least a 1px border colored slightly darker than their background to prevent them from washing out.",
+      "Do wrap tables in overflow containers (.table-wrap) to handle horizontal scrolling gracefully."
+    ],
+    "donts": [
+      "Don't use generic SaaS gradients, text gradients, or neon visual accents.",
+      "Don't use glassmorphism, background blurs, or soft drop shadows on inline cards.",
+      "Don't use rounded corners larger than 8px on cards or panels.",
+      "Don't use nested cards inside main page panels; use flat divider lines or background bands to section content.",
+      "Don't use side-stripe borders (e.g. border-left: 4px solid var(--primary)) on tables or callout boxes.",
+      "Don't exceed 12px of padding on table cells (td, th) to preserve compact data density."
+    ]
+  }
+}
