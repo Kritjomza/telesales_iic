@@ -19,6 +19,16 @@ public class CustomerResponseDto
     public int renewalDays { get; set; }
     public bool hasCostSheet { get; set; }
     public string updatedAt { get; set; } = "";
+    public string? phone { get; set; }
+    public string? subdistrict { get; set; }
+    public string? district { get; set; }
+    public string? province { get; set; }
+    public string? postal_code { get; set; }
+    public string? primary_contact_name { get; set; }
+    public string? primary_contact_tel { get; set; }
+    public string? primary_contact_email { get; set; }
+    public bool? hasProductLicenseInfo { get; set; }
+    public string? matchedField { get; set; }
 }
 
 public class ContactResponseDto

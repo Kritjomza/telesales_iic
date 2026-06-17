@@ -26,6 +26,15 @@ export const setForbiddenCallback = (callback: () => void) => {
   onForbiddenCallback = callback;
 };
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
   const response = await fetch(url, {
@@ -36,20 +45,6 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       ...(options?.headers || {})
     }
   });
-
-  if (response.status === 401) {
-    if (onUnauthorizedCallback) {
-      onUnauthorizedCallback();
-    }
-    throw new Error("Session expired. Please log in again.");
-  }
-
-  if (response.status === 403) {
-    if (onForbiddenCallback) {
-      onForbiddenCallback();
-    }
-    throw new Error("Access denied. You do not have permission to perform this action.");
-  }
 
   if (!response.ok) {
     let errorMessage = `API error ${response.status}`;
@@ -62,13 +57,30 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
         if (errorText && errorText.length < 200 && !errorText.includes("<!DOCTYPE") && !errorText.includes("<html>")) {
           errorMessage = errorText;
         } else {
-          errorMessage = "An internal server error occurred. Please contact support.";
+          if (response.status === 401) {
+            errorMessage = "Session expired. Please log in again.";
+          } else if (response.status === 403) {
+            errorMessage = "Access denied. You do not have permission to perform this action.";
+          } else {
+            errorMessage = "An internal server error occurred. Please contact support.";
+          }
         }
       }
     } catch {
       // Ignored
     }
-    throw new Error(errorMessage);
+
+    if (response.status === 401) {
+      if (onUnauthorizedCallback) {
+        onUnauthorizedCallback();
+      }
+    } else if (response.status === 403) {
+      if (onForbiddenCallback) {
+        onForbiddenCallback();
+      }
+    }
+
+    throw new ApiError(response.status, errorMessage);
   }
 
   const text = await response.text();
@@ -100,11 +112,38 @@ export const apiService = {
   },
 
   // Customers
-  async getCustomers(): Promise<Customer[]> {
-    return request<Customer[]>("/customers");
+  async getCustomers(params?: { search?: string; page?: number; pageSize?: number }): Promise<Customer[]> {
+    if (params) {
+      const searchParams = new URLSearchParams();
+      if (params.page !== undefined) searchParams.append("page", params.page.toString());
+      if (params.pageSize !== undefined) searchParams.append("pageSize", params.pageSize.toString());
+      if (params.search !== undefined) searchParams.append("search", params.search);
+      const res = await request<any>(`/customers?${searchParams.toString()}`);
+      if (res && Array.isArray(res)) return res;
+      if (res && res.items && Array.isArray(res.items)) return res.items;
+      return [];
+    }
+    const res = await request<any>("/customers");
+    if (res && Array.isArray(res)) return res;
+    if (res && res.items && Array.isArray(res.items)) return res.items;
+    return [];
   },
 
-  async addCustomer(customer: Omit<Customer, "id" | "updatedAt" | "renewalDays" | "hasCostSheet">): Promise<Customer> {
+  async addCustomer(
+    customer: Omit<
+      Customer,
+      | "id"
+      | "updatedAt"
+      | "renewalDays"
+      | "hasCostSheet"
+      | "telesale_id"
+      | "sale_id"
+      | "status"
+      | "is_active"
+      | "start_dt"
+    > &
+      Partial<Pick<Customer, "telesale_id" | "sale_id" | "status" | "is_active" | "start_dt">>
+  ): Promise<Customer> {
     return request<Customer>("/customers", {
       method: "POST",
       body: JSON.stringify(customer)
@@ -399,5 +438,180 @@ export const apiService = {
   // Reports
   async getReports(): Promise<{ projectLedger: any[]; agentPerformance: any[] }> {
     return request<{ projectLedger: any[]; agentPerformance: any[] }>("/customers/reports/all");
+  },
+
+  // Customer Import API calls
+  async previewCustomerImport(file: File): Promise<{
+    columns: string[];
+    sampleRows: Record<string, string>[];
+    totalRows: number;
+    fileId: string;
+  }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${API_BASE}/import/customers/preview`, {
+      method: "POST",
+      body: formData
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new ApiError(response.status, errorText || `API error ${response.status}`);
+    }
+    return response.json();
+  },
+
+  async suggestMappings(columns: string[]): Promise<{ mappings: { column: string; targetField: string }[]; confidence: number }> {
+    return request<{ mappings: { column: string; targetField: string }[]; confidence: number }>("/import/customers/suggest-mappings", {
+      method: "POST",
+      body: JSON.stringify({ columns })
+    });
+  },
+
+  async extractUnstructuredData(text: string): Promise<any> {
+    return request<any>("/import/customers/extract-unstructured", {
+      method: "POST",
+      body: JSON.stringify({ text })
+    });
+  },
+
+  async validateImportFilePage(
+    fileId: string,
+    page: number,
+    pageSize: number,
+    mappings: Record<string, string>,
+    policy: string,
+    mappingConfidence: number
+  ): Promise<{ rows: any[]; summary: any }> {
+    return request<{ rows: any[]; summary: any }>("/import/customers/validate-file", {
+      method: "POST",
+      body: JSON.stringify({ fileId, page, pageSize, mappings, policy, mappingConfidence })
+    });
+  },
+
+  async validateImportRows(rows: any[]): Promise<{ rows: any[]; summary: any }> {
+    const normalized = rows.map((r: any) => ({
+      name: r.name,
+      address: r.address,
+      phone: r.phone,
+      capital: r.capital,
+      businessType: r.businessType !== undefined ? r.businessType : r.business_type,
+      contactName: r.contactName !== undefined ? r.contactName : r.contact_name,
+      contactEmail: r.contactEmail !== undefined ? r.contactEmail : r.contact_email,
+      contactTel: r.contactTel !== undefined ? r.contactTel : r.contact_tel,
+      contactPosition: r.contactPosition !== undefined ? r.contactPosition : r.contact_position,
+      code: r.code,
+      unstructuredCompanyInfo: r.unstructuredCompanyInfo !== undefined ? r.unstructuredCompanyInfo : r.unstructured_company_info
+    }));
+    return request<{ rows: any[]; summary: any }>("/import/customers/validate", {
+      method: "POST",
+      body: JSON.stringify(normalized)
+    });
+  },
+
+  async previewCustomerImportPage(fileId: string, page: number, pageSize: number): Promise<Record<string, string>[]> {
+    return request<Record<string, string>[]>(`/import/customers/preview-page?fileId=${encodeURIComponent(fileId)}&page=${page}&pageSize=${pageSize}`);
+  },
+
+  async explainIssue(
+    issueType: string,
+    fieldName: string,
+    fieldValue: string,
+    issueDetails: string,
+    matchedCustomerDetails?: string
+  ): Promise<{ explanation: string }> {
+    return request<{ explanation: string }>("/import/customers/explain-issue", {
+      method: "POST",
+      body: JSON.stringify({ issueType, fieldName, fieldValue, issueDetails, matchedCustomerDetails })
+    });
+  },
+
+  async commitImportRowsStream(
+    payload: {
+      fileId: string;
+      mappings: Record<string, string>;
+      saleId: number | null;
+      telesaleId: number | null;
+      fileName: string;
+      rowOverrides: Record<number, string>;
+    },
+    onProgress: (progress: any) => void,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const url = `${API_BASE}/import/customers/commit-stream`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload),
+      signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new ApiError(response.status, errorText || `API error ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error("Response body is not readable.");
+    }
+
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const progress = JSON.parse(line);
+              onProgress(progress);
+            } catch (err) {
+              console.error("Failed to parse progress chunk:", err, line);
+            }
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        try {
+          const progress = JSON.parse(buffer);
+          onProgress(progress);
+        } catch (err) {
+          console.error("Failed to parse final progress chunk:", err, buffer);
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  },
+
+  async commitImportRows(payload: {
+    rows: any[];
+    saleId: number | null;
+    telesaleId: number | null;
+    fileName: string;
+  }): Promise<any> {
+    return request<any>("/import/customers/commit", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+
+  exportErrorsUrl(fileId: string, mappings: Record<string, string>): string {
+    const mappingsJson = JSON.stringify(mappings);
+    return `${API_BASE}/import/customers/export-errors?fileId=${encodeURIComponent(fileId)}&mappingsJson=${encodeURIComponent(mappingsJson)}`;
+  },
+
+  async getImportHistory(): Promise<any[]> {
+    return request<any[]>("/import/history");
   }
 };

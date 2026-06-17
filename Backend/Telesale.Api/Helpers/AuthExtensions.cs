@@ -135,12 +135,12 @@ public static class AuthExtensions
 
         if (role == AppRoles.Sale)
         {
-            return query.Where(c => c.sale_id == id);
+            return query.Where(c => c.sale_id == id || c.owner_id == id);
         }
 
         if (role == AppRoles.TeleSale)
         {
-            return query.Where(c => c.telesale_id == id);
+            return query.Where(c => c.telesale_id == id || c.owner_id == id);
         }
 
         return query.Where(_ => false);
@@ -176,8 +176,8 @@ public static class AuthExtensions
 
         return role switch
         {
-            AppRoles.Sale => c.sale_id == id,
-            AppRoles.TeleSale => c.telesale_id == id,
+            AppRoles.Sale => c.sale_id == id || c.owner_id == id,
+            AppRoles.TeleSale => c.telesale_id == id || c.owner_id == id,
             _ => false
         };
     }

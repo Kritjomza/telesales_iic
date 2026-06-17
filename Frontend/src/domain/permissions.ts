@@ -105,3 +105,28 @@ export function canAccessView(viewKey: string, role: string | null | undefined):
 export function getRoleMenuMatrix() {
   return rolePermissions;
 }
+
+export function canDeleteCustomer(role: string | null | undefined): boolean {
+  const normalized = normalizeRole(role);
+  return normalized === "Super Admin";
+}
+
+export function canDeleteMasterData(role: string | null | undefined, tableType: string): boolean {
+  const normalized = normalizeRole(role);
+  if (normalized === "Super Admin") return true;
+  if (normalized === "Manager") {
+    return tableType === "brands" || tableType === "products" || tableType === "competitors" || tableType === "businesstypes" || tableType === "profiles";
+  }
+  return false;
+}
+
+export function canWriteMasterData(role: string | null | undefined, tableType: string): boolean {
+  const normalized = normalizeRole(role);
+  if (normalized === "Super Admin" || normalized === "Admin") {
+    return true;
+  }
+  if (normalized === "Manager") {
+    return tableType === "brands" || tableType === "products" || tableType === "competitors" || tableType === "businesstypes" || tableType === "profiles";
+  }
+  return false;
+}

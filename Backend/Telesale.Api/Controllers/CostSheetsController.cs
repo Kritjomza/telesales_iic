@@ -22,7 +22,10 @@ public class CostSheetsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetCostSheets(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetCostSheets(
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
     {
         var userId = User.GetUserId();
         if (userId == null) return Unauthorized();
@@ -73,9 +76,33 @@ public class CostSheetsController : ControllerBase
         var brands = await _db.brands.AsNoTracking().ToDictionaryAsync(b => b.name ?? "", b => (int)b.id, cancellationToken);
         var products = await _db.products.AsNoTracking().ToDictionaryAsync(p => p.name ?? "", p => (int)p.id, cancellationToken);
 
-        var list = dbSheets.Select(cs => MapToResponseDto(cs, customers, brands, products)).ToList();
+        if (page.HasValue)
+        {
+            var size = pageSize ?? 10;
+            if (size <= 0) return BadRequest("Page size must be greater than zero.");
+            if (size > 100) return BadRequest("Page size cannot exceed 100.");
+            if (page.Value <= 0) return BadRequest("Page number must be greater than zero.");
 
-        return Ok(list);
+            var totalCount = dbSheets.Count;
+            var totalPages = (int)Math.Ceiling((double)totalCount / size);
+
+            var pageSheets = dbSheets.Skip((page.Value - 1) * size).Take(size).ToList();
+            var list = pageSheets.Select(cs => MapToResponseDto(cs, customers, brands, products)).ToList();
+
+            return Ok(new
+            {
+                items = list,
+                totalCount,
+                page = page.Value,
+                pageSize = size,
+                totalPages
+            });
+        }
+        else
+        {
+            var list = dbSheets.Select(cs => MapToResponseDto(cs, customers, brands, products)).ToList();
+            return Ok(list);
+        }
     }
 
     [HttpPost]

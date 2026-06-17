@@ -138,6 +138,71 @@ describe("ATS React workspace", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders customers when optional lookup data fails to load", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/auth/me")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify({
+            id: 1,
+            username: "AR9999",
+            name: "Narin Admin",
+            email: "narin@iic.co.th",
+            roles: "Super Admin",
+            avatar: "NA"
+          }))
+        });
+      }
+      if (url.includes("/api/customers")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([
+            {
+              id: 1,
+              name: "Apex Manufacturing",
+              address: "Bangkok",
+              bt_type: "Commercial",
+              sale_id: null,
+              telesale_id: null,
+              status: "New",
+              renewalDays: 45,
+              hasCostSheet: false,
+              is_active: true,
+              start_dt: "2026-06-01"
+            }
+          ]))
+        });
+      }
+      if (url.includes("/api/users")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([]))
+        });
+      }
+      if (url.includes("/api/masterdata/business-types")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([
+            { id: 1, type: "Commercial", dtl: "Commercial Business" }
+          ]))
+        });
+      }
+      if (url.includes("/api/masterdata/competitors")) {
+        return Promise.resolve({
+          status: 500,
+          ok: false,
+          text: () => Promise.resolve("Competitor lookup failed")
+        });
+      }
+      return Promise.resolve({ ok: true, text: () => Promise.resolve("") });
+    }));
+
+    render(<App />);
+
+    await screen.findByText("Apex Manufacturing");
+    expect(screen.queryByText("Failed to load initial customer data")).not.toBeInTheDocument();
+  });
+
   it("blocks unauthorized users and hides restricted sidebar links", async () => {
     localStorage.setItem("ats_user", JSON.stringify({
       id: 3,

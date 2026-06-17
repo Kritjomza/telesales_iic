@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Telesale.Api.Models;
@@ -44,6 +44,16 @@ public partial class customer
     public int? telesale_id_bak { get; set; }
 
     public int? sale_id_bak { get; set; }
+
+    public string? subdistrict { get; set; }
+
+    public string? district { get; set; }
+
+    public string? province { get; set; }
+
+    public string? postal_code { get; set; }
+
+    public int? user_cnt { get; set; }
 
     public DateTime? created_at { get; set; }
 

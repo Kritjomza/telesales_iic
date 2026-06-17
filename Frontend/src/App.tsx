@@ -8,7 +8,8 @@ import {
   Search,
   Table2,
   Users,
-  Building2
+  Building2,
+  Database
 } from "lucide-react";
 import { Toast, type ToastItem } from "./components/Toast";
 import { CustomerManageView } from "./views/CustomerManageView";
@@ -18,8 +19,9 @@ import { ReportsView } from "./views/ReportsView";
 import { MasterDataView, type MasterTableType } from "./views/MasterDataView";
 import { LoginView } from "./views/LoginView";
 import { ForbiddenView } from "./views/ForbiddenView";
-import { canAccessGroup, canAccessView } from "./domain/permissions";
-
+import { ImportCustomersView } from "./views/ImportCustomersView";
+import { ImportHistoryView } from "./views/ImportHistoryView";
+import { canAccessGroup, canAccessView, normalizeRole } from "./domain/permissions";
 const navigationGroups = [
   {
     label: "Master Data",
@@ -44,25 +46,31 @@ const navigationGroups = [
     ]
   },
   {
+    label: "Sale Manager",
+    icon: Building2,
+    items: [
+      { name: "Cost Sheet", key: "cost-sheet" }
+    ]
+  },
+  {
     label: "Report",
     icon: BookOpen,
     items: [
       { name: "Operation", key: "reports" },
       { name: "Assign History", key: "reports" },
-      { name: "Performance", key: "reports" },
       { name: "Summary Renewal", key: "reports" },
       { name: "Summary Project Detail", key: "reports" }
     ]
   },
   {
-    label: "Sale Manager",
-    icon: BarChart3,
+    label: "Admin",
+    icon: Database,
     items: [
-      { name: "Cost Sheet", key: "cost-sheet" }
+      { name: "Import Data", key: "import-customers" },
+      { name: "Import History", key: "import-history" }
     ]
   }
 ];
-
 function App() {
   // Navigation State
   const [currentView, setCurrentView] = useState<string>("manage");
@@ -71,9 +79,9 @@ function App() {
     "Master Data": false,
     "Customer": true,
     "Report": false,
-    "Sale Manager": false
+    "Sale Manager": false,
+    "Admin": false
   });
-
   // User Session
   const [currentUser, setCurrentUser] = useState<{
     id: number;
@@ -86,12 +94,9 @@ function App() {
     const saved = localStorage.getItem("ats_user");
     return saved ? JSON.parse(saved) : null;
   });
-
   const [isLoadingSession, setIsLoadingSession] = useState(true);
-
   // Global Toast State
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-
   const showToast = (message: string, type: "success" | "error" | "info") => {
     const newToast: ToastItem = {
       id: Math.random().toString(36).substring(2, 9),
@@ -100,11 +105,9 @@ function App() {
     };
     setToasts((prev) => [...prev, newToast]);
   };
-
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
-
   // Setup 401/403 callbacks and check session on mount
   useEffect(() => {
     setUnauthorizedCallback(() => {
@@ -112,12 +115,10 @@ function App() {
       setCurrentUser(null);
       showToast("Session expired. Please sign in again.", "error");
     });
-
     setForbiddenCallback(() => {
       setCurrentView("forbidden");
       showToast("Access denied. You do not have permission to perform this action.", "error");
     });
-
     const checkSession = async () => {
       try {
         const user = await apiService.getMe();
@@ -130,17 +131,14 @@ function App() {
         setIsLoadingSession(false);
       }
     };
-
     checkSession();
   }, []);
-
   const toggleGroup = (groupLabel: string) => {
     setExpandedGroups(prev => ({
       ...prev,
       [groupLabel]: !prev[groupLabel]
     }));
   };
-
   const handleNavigation = (viewKey: string, itemName: string) => {
     setCurrentView(viewKey);
     if (viewKey === "master-data") {
@@ -151,7 +149,6 @@ function App() {
       }
     }
   };
-
   const isChildSelected = (itemName: string, viewKey: string) => {
     if (currentView === "master-data" && viewKey === "master-data") {
       const match = navigationGroups[0].items.find(x => x.name === itemName);
@@ -160,10 +157,9 @@ function App() {
     if (currentView === "reports" && itemName === "Operation") return true; // Default
     return currentView === viewKey && currentView !== "master-data";
   };
-
   if (isLoadingSession) {
     return (
-      <div 
+      <div
         style={{
           display: "flex",
           alignItems: "center",
@@ -179,19 +175,17 @@ function App() {
       </div>
     );
   }
-
   if (!currentUser) {
     return (
       <div className="app-login-container">
-        <LoginView 
-          onLoginSuccess={(user) => setCurrentUser(user)} 
-          showToast={showToast} 
+        <LoginView
+          onLoginSuccess={(user) => setCurrentUser(user)}
+          showToast={showToast}
         />
         <Toast toasts={toasts} onClose={removeToast} />
       </div>
     );
   }
-
   return (
     <div className="app-shell">
       {/* Sidebar Navigation */}
@@ -228,22 +222,28 @@ function App() {
                     <Icon size={17} />
                     <span>{group.label}</span>
                   </button>
-
                   <div className="nav-children">
-                    {group.items.map((item) => {
-                      const viewKey = group.label === "Master Data" ? "master-data" : item.key;
-                      const selected = isChildSelected(item.name, viewKey);
-                      return (
-                        <button
-                          key={item.name}
-                          className={`nav-child-btn ${selected ? "selected" : ""}`}
-                          onClick={() => handleNavigation(viewKey, item.name)}
-                          type="button"
-                        >
-                          {item.name}
-                        </button>
-                      );
-                    })}
+                    {group.items
+                      .filter(item => {
+                        if (group.label === "Master Data" && normalizeRole(currentUser.roles) === "Manager") {
+                          return item.name === "Brand" || item.name === "Product";
+                        }
+                        return true;
+                      })
+                      .map((item) => {
+                        const viewKey = group.label === "Master Data" ? "master-data" : item.key;
+                        const selected = isChildSelected(item.name, viewKey);
+                        return (
+                          <button
+                            key={item.name}
+                            className={`nav-child-btn ${selected ? "selected" : ""}`}
+                            onClick={() => handleNavigation(viewKey, item.name)}
+                            type="button"
+                          >
+                            {item.name}
+                          </button>
+                        );
+                      })}
                   </div>
                 </section>
               );
@@ -297,6 +297,12 @@ function App() {
             {currentView === "master-data" && (
               <MasterDataView tableType={activeMasterTable} showToast={showToast} />
             )}
+            {currentView === "import-customers" && (
+              <ImportCustomersView showToast={showToast} />
+            )}
+            {currentView === "import-history" && (
+              <ImportHistoryView userRole={currentUser.roles} showToast={showToast} />
+            )}
           </>
         )}
       </div>
@@ -306,5 +312,4 @@ function App() {
     </div>
   );
 }
-
 export default App;

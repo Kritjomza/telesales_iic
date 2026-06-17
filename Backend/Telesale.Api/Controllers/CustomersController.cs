@@ -3,9 +3,11 @@ using Microsoft.EntityFrameworkCore;
 using Telesale.Api.Data;
 using Telesale.Api.Models;
 using System.ComponentModel.DataAnnotations;
+using System.Linq.Expressions;
 
 using Microsoft.AspNetCore.Authorization;
 using Telesale.Api.Helpers;
+using Telesale.Api.Services;
 
 namespace Telesale.Api.Controllers;
 
@@ -37,10 +39,10 @@ public class CustomersController : ControllerBase
 
         IQueryable<customer> query = _db.customers.ApplyCustomerScope(User, _db);
 
-        if (!string.IsNullOrWhiteSpace(search))
+        var searchTerm = CustomerSearch.NormalizeMultiToken(search);
+        if (searchTerm != null)
         {
-            var searchLower = search.Trim().ToLower();
-            query = query.Where(c => (c.name != null && c.name.ToLower().Contains(searchLower)) || (c.address != null && c.address.ToLower().Contains(searchLower)));
+            return await SearchCustomers(query, searchTerm, page, pageSize, today, cancellationToken);
         }
 
         if (page.HasValue)
@@ -72,7 +74,16 @@ public class CustomersController : ControllerBase
                     c.start_dt,
                     bt_type = _db.business_types.Where(bt => bt.id == c.business_type_id).Select(bt => bt.type).FirstOrDefault() ?? "Others",
                     hasCostSheet = _db.cost_sheets.Any(cs => cs.company == c.name),
-                    updatedAt = c.updated_at ?? c.created_at
+                    updatedAt = c.updated_at ?? c.created_at,
+                    c.phone,
+                    c.subdistrict,
+                    c.district,
+                    c.province,
+                    c.postal_code,
+                    primary_contact_name = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault(),
+                    primary_contact_tel = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault(),
+                    primary_contact_email = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault(),
+                    hasProductLicenseInfo = _db.details.Any(d => d.cust_id == c.id && _db.detail_devices.Any(dd => dd.dtl_id == d.id))
                 })
                 .ToListAsync(cancellationToken);
 
@@ -92,7 +103,16 @@ public class CustomersController : ControllerBase
                 bt_type = c.bt_type,
                 renewalDays = c.start_dt.HasValue ? c.start_dt.Value.AddYears(1).DayNumber - today.DayNumber : 30,
                 hasCostSheet = c.hasCostSheet,
-                updatedAt = c.updatedAt?.ToString("yyyy-MM-dd") ?? ""
+                updatedAt = c.updatedAt?.ToString("yyyy-MM-dd") ?? "",
+                phone = c.phone,
+                subdistrict = c.subdistrict,
+                district = c.district,
+                province = c.province,
+                postal_code = c.postal_code,
+                primary_contact_name = c.primary_contact_name,
+                primary_contact_tel = c.primary_contact_tel,
+                primary_contact_email = c.primary_contact_email,
+                hasProductLicenseInfo = c.hasProductLicenseInfo
             }).ToList();
 
             return Ok(new
@@ -124,7 +144,16 @@ public class CustomersController : ControllerBase
                     c.start_dt,
                     bt_type = _db.business_types.Where(bt => bt.id == c.business_type_id).Select(bt => bt.type).FirstOrDefault() ?? "Others",
                     hasCostSheet = _db.cost_sheets.Any(cs => cs.company == c.name),
-                    updatedAt = c.updated_at ?? c.created_at
+                    updatedAt = c.updated_at ?? c.created_at,
+                    c.phone,
+                    c.subdistrict,
+                    c.district,
+                    c.province,
+                    c.postal_code,
+                    primary_contact_name = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault(),
+                    primary_contact_tel = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault(),
+                    primary_contact_email = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault(),
+                    hasProductLicenseInfo = _db.details.Any(d => d.cust_id == c.id && _db.detail_devices.Any(dd => dd.dtl_id == d.id))
                 })
                 .ToListAsync(cancellationToken);
 
@@ -144,11 +173,311 @@ public class CustomersController : ControllerBase
                 bt_type = c.bt_type,
                 renewalDays = c.start_dt.HasValue ? c.start_dt.Value.AddYears(1).DayNumber - today.DayNumber : 30,
                 hasCostSheet = c.hasCostSheet,
-                updatedAt = c.updatedAt?.ToString("yyyy-MM-dd") ?? ""
+                updatedAt = c.updatedAt?.ToString("yyyy-MM-dd") ?? "",
+                phone = c.phone,
+                subdistrict = c.subdistrict,
+                district = c.district,
+                province = c.province,
+                postal_code = c.postal_code,
+                primary_contact_name = c.primary_contact_name,
+                primary_contact_tel = c.primary_contact_tel,
+                primary_contact_email = c.primary_contact_email,
+                hasProductLicenseInfo = c.hasProductLicenseInfo
             }).ToList();
 
             return Ok(list);
         }
+    }
+
+    private async Task<IActionResult> SearchCustomers(
+        IQueryable<customer> scopedQuery,
+        MultiTokenSearchTerm searchTerm,
+        int? page,
+        int? pageSize,
+        DateOnly today,
+        CancellationToken cancellationToken)
+    {
+        var size = pageSize ?? (page.HasValue ? 10 : 100);
+        if (size <= 0) return BadRequest("Page size must be greater than zero.");
+        if (size > 100) return BadRequest("Page size cannot exceed 100.");
+        if (page.HasValue && page.Value <= 0) return BadRequest("Page number must be greater than zero.");
+
+        var candidateLimit = page.HasValue
+            ? Math.Min(1000, Math.Max(size * page.Value * 4, 200))
+            : 1000;
+
+        var predicate = BuildCustomerSearchPredicate(searchTerm);
+        var directCandidates = await ProjectCustomerRows(scopedQuery.Where(predicate), candidateLimit, cancellationToken);
+
+        var rowsById = directCandidates.ToDictionary(c => c.Customer.id);
+        if (rowsById.Count < candidateLimit)
+        {
+            var fallbackRows = await ProjectCustomerRows(scopedQuery, candidateLimit, cancellationToken);
+            foreach (var row in fallbackRows)
+            {
+                rowsById.TryAdd(row.Customer.id, row);
+            }
+        }
+
+        var ids = rowsById.Keys.ToList();
+        var contactRows = await _db.details
+            .AsNoTracking()
+            .Where(d => ids.Contains(d.cust_id))
+            .Select(d => new
+            {
+                d.cust_id,
+                d.contact_name,
+                d.contact_tel,
+                d.contact_email
+            })
+            .ToListAsync(cancellationToken);
+
+        var contactsByCustomerId = contactRows
+            .GroupBy(d => d.cust_id)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(d => new ContactSearchDocument(d.contact_name, d.contact_tel, d.contact_email)).ToList());
+
+        var companyNames = rowsById.Values
+            .Select(r => r.Customer.name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct()
+            .ToList();
+
+        var bookingRows = await _db.cost_sheets
+            .AsNoTracking()
+            .Where(cs => cs.company != null && cs.qo_no != null && companyNames.Contains(cs.company))
+            .Select(cs => new { cs.company, cs.qo_no })
+            .ToListAsync(cancellationToken);
+
+        var bookingNumbersByCompany = bookingRows
+            .Where(cs => !string.IsNullOrWhiteSpace(cs.company))
+            .GroupBy(cs => cs.company!)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(cs => cs.qo_no).ToList());
+
+        var rankedRows = rowsById.Values
+            .Select(row =>
+            {
+                contactsByCustomerId.TryGetValue(row.Customer.id, out var contacts);
+                bookingNumbersByCompany.TryGetValue(row.Customer.name ?? "", out var bookingNumbers);
+                var document = new CustomerSearchDocument(
+                    row.Customer,
+                    row.BusinessType,
+                    row.SaleName,
+                    row.TelesaleName,
+                    contacts,
+                    bookingNumbers);
+                var match = CustomerSearch.RankDocument(document, searchTerm);
+                return new { row, match };
+            })
+            .Where(x => x.match != null)
+            .OrderBy(x => x.match!.Rank)
+            .ThenBy(x => x.row.Customer.id)
+            .ToList();
+
+        var totalCount = rankedRows.Count;
+        var totalPages = page.HasValue ? (int)Math.Ceiling((double)totalCount / size) : 1;
+        var pageItems = page.HasValue
+            ? rankedRows.Skip((page.Value - 1) * size).Take(size).ToList()
+            : rankedRows.Take(size).ToList();
+
+        var list = pageItems
+            .Select(x => MapCustomerListRow(x.row, today, x.match!.MatchedField))
+            .ToList();
+
+        if (page.HasValue)
+        {
+            return Ok(new
+            {
+                items = list,
+                totalCount,
+                page = page.Value,
+                pageSize = size,
+                totalPages
+            });
+        }
+
+        return Ok(list);
+    }
+
+    private async Task<List<CustomerListRow>> ProjectCustomerRows(
+        IQueryable<customer> query,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var customers = await query
+            .AsNoTracking()
+            .OrderBy(c => c.id)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+
+        if (customers.Count == 0)
+        {
+            return new List<CustomerListRow>();
+        }
+
+        var customerIds = customers.Select(c => c.id).ToList();
+        var businessTypeIds = customers
+            .Where(c => c.business_type_id.HasValue && c.business_type_id.Value > 0)
+            .Select(c => (uint)c.business_type_id!.Value)
+            .Distinct()
+            .ToList();
+        var userIds = customers
+            .SelectMany(c => new[] { c.sale_id, c.telesale_id })
+            .Where(id => id.HasValue && id.Value > 0)
+            .Select(id => (uint)id!.Value)
+            .Distinct()
+            .ToList();
+        var companyNames = customers
+            .Select(c => c.name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct()
+            .ToList();
+
+        var businessTypesById = await _db.business_types
+            .AsNoTracking()
+            .Where(bt => businessTypeIds.Contains(bt.id))
+            .ToDictionaryAsync(bt => bt.id, bt => bt.type ?? "Others", cancellationToken);
+        var usersById = await _db.users
+            .AsNoTracking()
+            .Where(u => userIds.Contains(u.id))
+            .ToDictionaryAsync(u => u.id, u => u.name, cancellationToken);
+        var companiesWithCostSheets = await _db.cost_sheets
+            .AsNoTracking()
+            .Where(cs => cs.company != null && companyNames.Contains(cs.company))
+            .Select(cs => cs.company!)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var companyCostSheetSet = companiesWithCostSheets.ToHashSet();
+        var contactRows = await _db.details
+            .AsNoTracking()
+            .Where(d => customerIds.Contains(d.cust_id))
+            .OrderBy(d => d.id)
+            .Select(d => new
+            {
+                d.id,
+                d.cust_id,
+                d.contact_name,
+                d.contact_tel,
+                d.contact_email
+            })
+            .ToListAsync(cancellationToken);
+        var primaryContactsByCustomerId = contactRows
+            .GroupBy(d => d.cust_id)
+            .ToDictionary(g => g.Key, g => g.First());
+        var customerIdsWithProductInfo = await _db.details
+            .AsNoTracking()
+            .Where(d => customerIds.Contains(d.cust_id) && _db.detail_devices.Any(dd => dd.dtl_id == d.id))
+            .Select(d => d.cust_id)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var productInfoSet = customerIdsWithProductInfo.ToHashSet();
+
+        return customers.Select(c =>
+        {
+            var businessType = "Others";
+            if (c.business_type_id.HasValue && c.business_type_id.Value > 0)
+            {
+                businessTypesById.TryGetValue((uint)c.business_type_id.Value, out businessType);
+                businessType ??= "Others";
+            }
+
+            string? saleName = null;
+            if (c.sale_id.HasValue && c.sale_id.Value > 0)
+            {
+                usersById.TryGetValue((uint)c.sale_id.Value, out saleName);
+            }
+
+            string? telesaleName = null;
+            if (c.telesale_id.HasValue && c.telesale_id.Value > 0)
+            {
+                usersById.TryGetValue((uint)c.telesale_id.Value, out telesaleName);
+            }
+
+            primaryContactsByCustomerId.TryGetValue(c.id, out var primaryContact);
+
+            return new CustomerListRow
+            {
+                Customer = c,
+                BusinessType = businessType,
+                SaleName = saleName,
+                TelesaleName = telesaleName,
+                HasCostSheet = c.name != null && companyCostSheetSet.Contains(c.name),
+                PrimaryContactName = primaryContact?.contact_name,
+                PrimaryContactTel = primaryContact?.contact_tel,
+                PrimaryContactEmail = primaryContact?.contact_email,
+                HasProductLicenseInfo = productInfoSet.Contains(c.id)
+            };
+        }).ToList();
+    }
+
+    private Expression<Func<customer, bool>> BuildCustomerSearchPredicate(MultiTokenSearchTerm searchTerm)
+    {
+        Expression<Func<customer, bool>> predicate = c => false;
+
+        foreach (var token in searchTerm.Tokens)
+        {
+            var text = token.Text;
+            var phone = token.PhoneText;
+            uint? numericId = uint.TryParse(text, out var parsedId) ? parsedId : null;
+
+            predicate = predicate.Or(c =>
+                (numericId.HasValue && c.id == numericId.Value) ||
+                (c.name != null && (c.name.ToLower() == text || c.name.ToLower().StartsWith(text) || c.name.ToLower().Contains(text))) ||
+                (c.address != null && (c.address.ToLower() == text || c.address.ToLower().StartsWith(text) || c.address.ToLower().Contains(text))) ||
+                (c.code != null && (c.code.ToLower() == text || c.code.ToLower().StartsWith(text) || c.code.ToLower().Contains(text))) ||
+                (c.phone != null && c.phone.ToLower().Contains(text)));
+        }
+
+        return predicate;
+    }
+
+    private static CustomerResponseDto MapCustomerListRow(CustomerListRow row, DateOnly today, string? matchedField = null)
+    {
+        var c = row.Customer;
+        return new CustomerResponseDto
+        {
+            id = c.id,
+            name = c.name ?? "Unnamed",
+            address = c.address ?? "",
+            capital = c.capital?.ToString() ?? "0",
+            telesale_id = c.telesale_id,
+            telesale = row.TelesaleName,
+            sale_id = c.sale_id,
+            sale = row.SaleName,
+            status = c.status,
+            is_active = c.is_active ?? true,
+            start_dt = c.start_dt?.ToString("yyyy-MM-dd"),
+            bt_type = row.BusinessType,
+            renewalDays = c.start_dt.HasValue ? c.start_dt.Value.AddYears(1).DayNumber - today.DayNumber : 30,
+            hasCostSheet = row.HasCostSheet,
+            updatedAt = c.updated_at?.ToString("yyyy-MM-dd") ?? c.created_at?.ToString("yyyy-MM-dd") ?? "",
+            phone = c.phone,
+            subdistrict = c.subdistrict,
+            district = c.district,
+            province = c.province,
+            postal_code = c.postal_code,
+            primary_contact_name = row.PrimaryContactName,
+            primary_contact_tel = row.PrimaryContactTel,
+            primary_contact_email = row.PrimaryContactEmail,
+            hasProductLicenseInfo = row.HasProductLicenseInfo,
+            matchedField = matchedField
+        };
+    }
+
+    private sealed class CustomerListRow
+    {
+        public customer Customer { get; set; } = null!;
+        public string BusinessType { get; set; } = "Others";
+        public string? SaleName { get; set; }
+        public string? TelesaleName { get; set; }
+        public bool HasCostSheet { get; set; }
+        public string? PrimaryContactName { get; set; }
+        public string? PrimaryContactTel { get; set; }
+        public string? PrimaryContactEmail { get; set; }
+        public bool HasProductLicenseInfo { get; set; }
     }
 
     [HttpPost]
@@ -180,7 +509,11 @@ public class CustomersController : ControllerBase
             created_at = DateTime.UtcNow,
             updated_at = DateTime.UtcNow,
             start_dt = DateOnly.FromDateTime(DateTime.Today),
-            owner_id = (int?)userId.Value
+            owner_id = (int?)userId.Value,
+            subdistrict = dto.subdistrict,
+            district = dto.district,
+            province = dto.province,
+            postal_code = dto.postal_code
         };
 
         if (role == AppRoles.Sale)
@@ -228,6 +561,10 @@ public class CustomersController : ControllerBase
         }
         if (dto.is_active.HasValue) c.is_active = dto.is_active.Value;
         if (dto.status != null) c.status = dto.status;
+        if (dto.subdistrict != null) c.subdistrict = dto.subdistrict;
+        if (dto.district != null) c.district = dto.district;
+        if (dto.province != null) c.province = dto.province;
+        if (dto.postal_code != null) c.postal_code = dto.postal_code;
         
         if (dto.bt_type != null)
         {
@@ -244,20 +581,15 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> DeleteCustomer(uint id, CancellationToken cancellationToken)
     {
         var role = User.GetUserRole();
-        if (!User.CanManageAssignments())
+        if (role != AppRoles.SuperAdmin)
         {
-            return Forbid();
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "You do not have permission to delete customer records." });
         }
 
         var c = await _db.customers.FindAsync(new object[] { id }, cancellationToken);
         if (c == null)
         {
-            return User.IsAdmin() ? NotFound() : Forbid();
-        }
-
-        if (!await HasCustomerAccess(c, cancellationToken))
-        {
-            return Forbid();
+            return NotFound();
         }
 
         _db.customers.Remove(c);
@@ -1030,6 +1362,20 @@ public class CustomersController : ControllerBase
             hasCostSheet = await _db.cost_sheets.AsNoTracking().AnyAsync(cs => cs.company == c.name, cancellationToken);
         }
 
+        var primaryContact = await _db.details
+            .AsNoTracking()
+            .Where(d => d.cust_id == c.id)
+            .OrderBy(d => d.id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        bool hasProductLicenseInfo = false;
+        if (primaryContact != null)
+        {
+            hasProductLicenseInfo = await _db.detail_devices
+                .AsNoTracking()
+                .AnyAsync(dd => dd.dtl_id == primaryContact.id, cancellationToken);
+        }
+
         return new CustomerResponseDto
         {
             id = c.id,
@@ -1046,7 +1392,16 @@ public class CustomersController : ControllerBase
             bt_type = btType,
             renewalDays = renewalDays,
             hasCostSheet = hasCostSheet,
-            updatedAt = c.updated_at?.ToString("yyyy-MM-dd") ?? c.created_at?.ToString("yyyy-MM-dd") ?? ""
+            updatedAt = c.updated_at?.ToString("yyyy-MM-dd") ?? c.created_at?.ToString("yyyy-MM-dd") ?? "",
+            phone = c.phone,
+            subdistrict = c.subdistrict,
+            district = c.district,
+            province = c.province,
+            postal_code = c.postal_code,
+            primary_contact_name = primaryContact?.contact_name,
+            primary_contact_tel = primaryContact?.contact_tel,
+            primary_contact_email = primaryContact?.contact_email,
+            hasProductLicenseInfo = hasProductLicenseInfo
         };
     }
 
@@ -1074,6 +1429,18 @@ public class CustomerCreateDto
     [Required]
     [StringLength(255)]
     public string bt_type { get; set; } = null!;
+
+    [StringLength(255)]
+    public string? subdistrict { get; set; }
+
+    [StringLength(255)]
+    public string? district { get; set; }
+
+    [StringLength(255)]
+    public string? province { get; set; }
+
+    [StringLength(10)]
+    public string? postal_code { get; set; }
 }
 
 public class CustomerUpdateDto
@@ -1097,6 +1464,18 @@ public class CustomerUpdateDto
     
     [StringLength(255)]
     public string? bt_type { get; set; }
+
+    [StringLength(255)]
+    public string? subdistrict { get; set; }
+
+    [StringLength(255)]
+    public string? district { get; set; }
+
+    [StringLength(255)]
+    public string? province { get; set; }
+
+    [StringLength(10)]
+    public string? postal_code { get; set; }
 }
 
 public class CustomerAssignDto

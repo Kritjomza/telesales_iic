@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { 
   Users, UserCheck, ShieldCheck, FileText, Search, Plus, 
   FileDown, Pencil, Trash2, ArrowLeft, Laptop, Target, Check, AlertCircle 
@@ -20,6 +20,8 @@ type SubView =
   | { type: "advance-data"; customer: Customer }
   | { type: "devices"; contact: ContactDetail; customer: Customer }
   | { type: "projects"; contact: ContactDetail; customer: Customer };
+
+const SEARCH_DEBOUNCE_MS = 350;
 
 export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole, showToast }) => {
   const isAdmin = isAdminRole(userRole);
@@ -73,23 +75,59 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
   const [activeProject, setActiveProject] = useState<DetailProject | null>(null);
 
   const [isForbidden, setIsForbidden] = useState(false);
+  const hasLoadedCustomersRef = useRef(false);
+  const customerRequestSeq = useRef(0);
+  const lastLoadedQueryRef = useRef("");
+
+  const loadCustomers = useCallback(async (query: string = "", force = false) => {
+    const normalizedQuery = query.trim().replace(/\s+/g, " ");
+    if (!force && normalizedQuery === lastLoadedQueryRef.current) return;
+
+    const requestId = customerRequestSeq.current + 1;
+    customerRequestSeq.current = requestId;
+
+    try {
+      setIsLoading(true);
+      const custs = await apiService.getCustomers(
+        normalizedQuery ? { search: normalizedQuery, pageSize: 100 } : undefined
+      );
+
+      if (requestId === customerRequestSeq.current) {
+        setCustomers(custs);
+        lastLoadedQueryRef.current = normalizedQuery;
+      }
+    } catch (err: any) {
+      if (requestId !== customerRequestSeq.current) return;
+
+      if (err.status === 403 || err.message?.includes("403") || err.message?.includes("Forbidden")) {
+        setIsForbidden(true);
+      } else {
+        showToast("Failed to load customer data", "error");
+      }
+    } finally {
+      if (requestId === customerRequestSeq.current) {
+        setIsLoading(false);
+      }
+    }
+  }, [showToast]);
 
   const loadInitialData = async () => {
+    let shouldLoadSupportingData = false;
+
     try {
       setIsLoading(true);
       setIsForbidden(false);
-      const [custs, uList, btList, compList] = await Promise.all([
+      const [custs, uList] = await Promise.all([
         apiService.getCustomers(),
-        canManageAssignments(userRole) ? apiService.getUsers() : Promise.resolve([]),
-        apiService.getBusinessTypes(),
-        apiService.getCompetitors()
+        canManageAssignments(userRole) ? apiService.getUsers() : Promise.resolve([])
       ]);
       setCustomers(custs);
       setUsers(uList);
-      setBusinessTypes(btList);
-      setCompetitors(compList);
+      hasLoadedCustomersRef.current = true;
+      lastLoadedQueryRef.current = "";
+      shouldLoadSupportingData = true;
     } catch (err: any) {
-      if (err.message?.includes("403") || err.message?.includes("Forbidden")) {
+      if (err.status === 403 || err.message?.includes("403") || err.message?.includes("Forbidden")) {
         setIsForbidden(true);
       } else {
         showToast("Failed to load initial customer data", "error");
@@ -97,11 +135,37 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     } finally {
       setIsLoading(false);
     }
+
+    if (!shouldLoadSupportingData) return;
+
+    const [businessTypeResult, competitorResult] = await Promise.allSettled([
+      apiService.getBusinessTypes(),
+      apiService.getCompetitors()
+    ]);
+
+    if (businessTypeResult.status === "fulfilled") {
+      setBusinessTypes(businessTypeResult.value);
+    }
+
+    if (competitorResult.status === "fulfilled") {
+      setCompetitors(competitorResult.value);
+    }
   };
 
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  useEffect(() => {
+    if (!hasLoadedCustomersRef.current || subView.type !== "list") return;
+
+    const timeoutId = window.setTimeout(() => {
+      setAppliedQuery(draftQuery);
+      void loadCustomers(draftQuery);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [draftQuery, loadCustomers, subView.type]);
 
   // Metrics
   const metrics = useMemo(() => {
@@ -116,7 +180,6 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
   // Filtered customers
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => {
-      const matchQuery = `${c.name} ${c.address}`.toLowerCase().includes(appliedQuery.toLowerCase());
       const matchBus = appliedBusinessType ? c.bt_type === appliedBusinessType : true;
       
       let matchSale = true;
@@ -127,9 +190,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
       if (appliedTelesaleFilter === "assigned") matchTele = c.telesale_id !== null;
       else if (appliedTelesaleFilter === "unassigned") matchTele = c.telesale_id === null;
 
-      return matchQuery && matchBus && matchSale && matchTele;
+      return matchBus && matchSale && matchTele;
     });
-  }, [customers, appliedQuery, appliedBusinessType, appliedSaleFilter, appliedTelesaleFilter]);
+  }, [customers, appliedBusinessType, appliedSaleFilter, appliedTelesaleFilter]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,6 +200,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     setAppliedBusinessType(draftBusinessType);
     setAppliedSaleFilter(draftSaleFilter);
     setAppliedTelesaleFilter(draftTelesaleFilter);
+    void loadCustomers(draftQuery, true);
   };
 
   const handleClearSearch = () => {
@@ -148,6 +212,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     setAppliedBusinessType("");
     setAppliedSaleFilter("all");
     setAppliedTelesaleFilter("all");
+    void loadCustomers("", true);
   };
 
   // Helper: Get Username by ID
@@ -185,8 +250,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         });
         showToast(`Added customer: ${customerData.name}`, "success");
       }
-      const refreshed = await apiService.getCustomers();
-      setCustomers(refreshed);
+      await loadCustomers(appliedQuery, true);
       setIsCustomerDrawerOpen(false);
     } catch (err) {
       showToast("Failed to save customer", "error");
@@ -197,8 +261,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     if (window.confirm(`Are you sure you want to delete customer "${name}"?`)) {
       try {
         await apiService.deleteCustomer(id);
-        const refreshed = await apiService.getCustomers();
-        setCustomers(refreshed);
+        await loadCustomers(appliedQuery, true);
         showToast("Customer deleted successfully", "success");
       } catch (err) {
         showToast("Failed to delete customer", "error");
@@ -210,8 +273,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     const nextState = !c.is_active;
     try {
       await apiService.updateCustomer(c.id, { is_active: nextState });
-      const refreshed = await apiService.getCustomers();
-      setCustomers(refreshed);
+      await loadCustomers(appliedQuery, true);
       showToast(`${c.name} ${nextState ? "Enabled" : "Disabled"} successfully`, "success");
     } catch (err) {
       showToast("Operation failed", "error");
@@ -229,8 +291,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     if (assignTargetCustomer) {
       try {
         await apiService.assignCustomer(assignTargetCustomer.id, userId, assignRole);
-        const refreshed = await apiService.getCustomers();
-        setCustomers(refreshed);
+        await loadCustomers(appliedQuery, true);
         showToast(`Assigned ${assignRole} successfully`, "success");
       } catch (err) {
         showToast("Assignment failed", "error");
@@ -436,8 +497,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
           start_dt: new Date().toISOString().split("T")[0]
         });
       }
-      const refreshed = await apiService.getCustomers();
-      setCustomers(refreshed);
+      await loadCustomers(appliedQuery, true);
       setImportPreviewRows([]);
       setIsImportModalOpen(false);
       showToast(`Successfully imported ${importPreviewRows.length} customers!`, "success");
@@ -603,6 +663,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                           <td>
                             <strong>{c.name}</strong>
                             <span className="subtext">{c.address}</span>
+                            {c.matchedField && (
+                              <span className="subtext">Matched: {c.matchedField}</span>
+                            )}
                           </td>
                           <td>{c.start_dt || "-"}</td>
                           <td>

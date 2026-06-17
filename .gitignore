@@ -57,3 +57,8 @@ Thumbs.db
 .claude/
 .cursor/
 .gemini/
+
+# Local env files and temp imports
+.env
+Backend/Telesale.Api/.env
+Backend/Telesale.Api/TempImports/

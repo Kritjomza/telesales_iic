@@ -48,6 +48,12 @@ public partial class TelesaleDbContext : DbContext
 
     public virtual DbSet<user> users { get; set; }
 
+    public virtual DbSet<import_session> import_sessions { get; set; }
+
+    public virtual DbSet<import_row> import_rows { get; set; }
+
+    public virtual DbSet<assignment_history> assignment_histories { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder
@@ -227,6 +233,11 @@ public partial class TelesaleDbContext : DbContext
             entity.Property(e => e.telesale_id_bak).HasColumnType("int(11)");
             entity.Property(e => e.updated_at).HasColumnType("timestamp");
             entity.Property(e => e.updated_user).HasColumnType("int(11)");
+            entity.Property(e => e.subdistrict).HasMaxLength(255);
+            entity.Property(e => e.district).HasMaxLength(255);
+            entity.Property(e => e.province).HasMaxLength(255);
+            entity.Property(e => e.postal_code).HasMaxLength(10);
+            entity.Property(e => e.user_cnt).HasColumnType("int(11)");
         });
 
         modelBuilder.Entity<detail>(entity =>
@@ -480,6 +491,71 @@ public partial class TelesaleDbContext : DbContext
                 .HasColumnType("enum('Admin','Super Admin','Manager','Tele Sale','Sale')");
             entity.Property(e => e.tel).HasMaxLength(255);
             entity.Property(e => e.updated_at).HasColumnType("timestamp");
+        });
+
+        modelBuilder.Entity<import_session>(entity =>
+        {
+            entity.HasKey(e => e.id).HasName("PRIMARY");
+
+            entity
+                .ToTable("import_sessions")
+                .HasCharSet("utf8")
+                .UseCollation("utf8_unicode_ci");
+
+            entity.Property(e => e.id).HasColumnType("int(10) unsigned");
+            entity.Property(e => e.imported_by).HasColumnType("int(10) unsigned");
+            entity.Property(e => e.file_name).HasMaxLength(255);
+            entity.Property(e => e.total_rows).HasColumnType("int(11)");
+            entity.Property(e => e.imported_rows).HasColumnType("int(11)");
+            entity.Property(e => e.skipped_rows).HasColumnType("int(11)");
+            entity.Property(e => e.error_rows).HasColumnType("int(11)");
+            entity.Property(e => e.errors_json).HasColumnType("longtext");
+            entity.Property(e => e.created_at).HasColumnType("timestamp");
+            entity.Property(e => e.updated_at).HasColumnType("timestamp");
+        });
+
+        modelBuilder.Entity<import_row>(entity =>
+        {
+            entity.HasKey(e => e.id).HasName("PRIMARY");
+
+            entity
+                .ToTable("import_rows")
+                .HasCharSet("utf8")
+                .UseCollation("utf8_unicode_ci");
+
+            entity.Property(e => e.id).HasColumnType("int(10) unsigned");
+            entity.Property(e => e.session_id).HasColumnType("int(10) unsigned");
+            entity.Property(e => e.row_data_json).HasColumnType("longtext");
+            entity.Property(e => e.status).HasMaxLength(50);
+            entity.Property(e => e.error_message).HasColumnType("text");
+            entity.Property(e => e.created_at).HasColumnType("timestamp");
+        });
+
+        modelBuilder.Entity<assignment_history>(entity =>
+        {
+            entity.HasKey(e => e.id).HasName("PRIMARY");
+
+            entity
+                .ToTable("assignment_history")
+                .HasCharSet("utf8")
+                .UseCollation("utf8_unicode_ci");
+
+            entity.HasIndex(e => e.customer_id, "assignment_history_customer_id_foreign");
+
+            entity.Property(e => e.id).HasColumnType("int(10) unsigned");
+            entity.Property(e => e.customer_id).HasColumnType("int(10) unsigned");
+            entity.Property(e => e.old_sale_id).HasColumnType("int(11)");
+            entity.Property(e => e.new_sale_id).HasColumnType("int(11)");
+            entity.Property(e => e.old_telesale_id).HasColumnType("int(11)");
+            entity.Property(e => e.new_telesale_id).HasColumnType("int(11)");
+            entity.Property(e => e.changed_by_id).HasColumnType("int(10) unsigned");
+            entity.Property(e => e.changed_at).HasColumnType("timestamp");
+            entity.Property(e => e.reason).HasMaxLength(255);
+
+            entity.HasOne(d => d.customer).WithMany()
+                .HasForeignKey(d => d.customer_id)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("assignment_history_customer_id_foreign");
         });
 
         OnModelCreatingPartial(modelBuilder);
