@@ -10,7 +10,8 @@ import type {
   Category,
   Competitor,
   Profile,
-  CostSheet
+  CostSheet,
+  PaginatedResponse
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
@@ -127,6 +128,40 @@ export const apiService = {
     if (res && Array.isArray(res)) return res;
     if (res && res.items && Array.isArray(res.items)) return res.items;
     return [];
+  },
+
+  async getCustomersPaginated(params: {
+    page: number;
+    pageSize: number;
+    search?: string;
+    businessType?: string;
+    saleId?: string;
+    telesaleId?: string;
+  }): Promise<PaginatedResponse<Customer>> {
+    const searchParams = new URLSearchParams();
+    searchParams.append("page", params.page.toString());
+    searchParams.append("pageSize", params.pageSize.toString());
+    if (params.search) {
+      const clean = params.search.trim().replace(/\s+/g, "+");
+      if (clean) {
+        searchParams.append("search", `+${clean}+`);
+      }
+    }
+    if (params.businessType) searchParams.append("businessType", params.businessType);
+    if (params.saleId) searchParams.append("saleId", params.saleId);
+    if (params.telesaleId) searchParams.append("telesaleId", params.telesaleId);
+
+    const res = await request<any>(`/customers?${searchParams.toString()}`);
+    if (res && Array.isArray(res)) {
+      return {
+        items: res,
+        totalCount: res.length,
+        page: params.page,
+        pageSize: params.pageSize,
+        totalPages: Math.ceil(res.length / params.pageSize)
+      };
+    }
+    return res;
   },
 
   async addCustomer(
@@ -257,6 +292,20 @@ export const apiService = {
   // Cost Sheets
   async getCostSheets(): Promise<CostSheet[]> {
     return request<CostSheet[]>("/costsheets");
+  },
+
+  async getCostSheetsPaginated(params: { page: number; pageSize: number }): Promise<PaginatedResponse<CostSheet>> {
+    const res = await request<any>(`/costsheets?page=${params.page}&pageSize=${params.pageSize}`);
+    if (res && Array.isArray(res)) {
+      return {
+        items: res,
+        totalCount: res.length,
+        page: params.page,
+        pageSize: params.pageSize,
+        totalPages: Math.ceil(res.length / params.pageSize)
+      };
+    }
+    return res;
   },
 
   async addCostSheet(costSheet: Omit<CostSheet, "id" | "created_at">): Promise<CostSheet> {
@@ -613,5 +662,19 @@ export const apiService = {
 
   async getImportHistory(): Promise<any[]> {
     return request<any[]>("/import/history");
+  },
+
+  async getImportHistoryPaginated(params: { page: number; pageSize: number }): Promise<PaginatedResponse<any>> {
+    const res = await request<any>(`/import/history?page=${params.page}&pageSize=${params.pageSize}`);
+    if (res && Array.isArray(res)) {
+      return {
+        items: res,
+        totalCount: res.length,
+        page: params.page,
+        pageSize: params.pageSize,
+        totalPages: Math.ceil(res.length / params.pageSize)
+      };
+    }
+    return res;
   }
 };

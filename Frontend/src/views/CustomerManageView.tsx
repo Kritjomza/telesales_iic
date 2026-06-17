@@ -8,6 +8,7 @@ import type { Customer, ContactDetail, DetailDevice, DetailProject, User, Catego
 import { Drawer } from "../components/Drawer";
 import { AssigneeModal } from "../components/AssigneeModal";
 import { ForbiddenView } from "./ForbiddenView";
+import { Pagination } from "../components/Pagination";
 import { canManageAssignments, isAdminRole, isAgentRole, isSupervisorRole } from "../domain/permissions";
 
 interface CustomerManageViewProps {
@@ -79,22 +80,47 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
   const customerRequestSeq = useRef(0);
   const lastLoadedQueryRef = useRef("");
 
-  const loadCustomers = useCallback(async (query: string = "", force = false) => {
-    const normalizedQuery = query.trim().replace(/\s+/g, " ");
-    if (!force && normalizedQuery === lastLoadedQueryRef.current) return;
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [backendMetrics, setBackendMetrics] = useState({
+    total: 0,
+    unassigned: 0,
+    nearRenewal: 0,
+    pendingCostSheets: 0
+  });
 
+  const fetchCustomers = useCallback(async (
+    currentPage: number,
+    currentPageSize: number,
+    searchVal: string,
+    btFilter: string,
+    saleFilter: string,
+    teleFilter: string
+  ) => {
     const requestId = customerRequestSeq.current + 1;
     customerRequestSeq.current = requestId;
 
     try {
       setIsLoading(true);
-      const custs = await apiService.getCustomers(
-        normalizedQuery ? { search: normalizedQuery, pageSize: 100 } : undefined
-      );
+      const res = await apiService.getCustomersPaginated({
+        page: currentPage,
+        pageSize: currentPageSize,
+        search: searchVal,
+        businessType: btFilter,
+        saleId: saleFilter,
+        telesaleId: teleFilter
+      });
 
       if (requestId === customerRequestSeq.current) {
-        setCustomers(custs);
-        lastLoadedQueryRef.current = normalizedQuery;
+        setCustomers(res.items);
+        setTotalCount(res.totalCount);
+        setTotalPages(res.totalPages);
+        if (res.metrics) {
+          setBackendMetrics(res.metrics);
+        }
       }
     } catch (err: any) {
       if (requestId !== customerRequestSeq.current) return;
@@ -111,19 +137,36 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     }
   }, [showToast]);
 
+  const refreshCustomers = useCallback(() => {
+    void fetchCustomers(
+      page,
+      pageSize,
+      appliedQuery,
+      appliedBusinessType,
+      appliedSaleFilter,
+      appliedTelesaleFilter
+    );
+  }, [fetchCustomers, page, pageSize, appliedQuery, appliedBusinessType, appliedSaleFilter, appliedTelesaleFilter]);
+
   const loadInitialData = async () => {
     let shouldLoadSupportingData = false;
 
     try {
       setIsLoading(true);
       setIsForbidden(false);
-      const [custs, uList] = await Promise.all([
-        apiService.getCustomers(),
+      const [res, uList] = await Promise.all([
+        apiService.getCustomersPaginated({ page: 1, pageSize }),
         canManageAssignments(userRole) ? apiService.getUsers() : Promise.resolve([])
       ]);
-      setCustomers(custs);
+      setCustomers(res.items);
+      setTotalCount(res.totalCount);
+      setTotalPages(res.totalPages);
+      if (res.metrics) {
+        setBackendMetrics(res.metrics);
+      }
       setUsers(uList);
       hasLoadedCustomersRef.current = true;
+      setPage(1);
       lastLoadedQueryRef.current = "";
       shouldLoadSupportingData = true;
     } catch (err: any) {
@@ -138,72 +181,101 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
 
     if (!shouldLoadSupportingData) return;
 
-    const [businessTypeResult, competitorResult] = await Promise.allSettled([
-      apiService.getBusinessTypes(),
-      apiService.getCompetitors()
-    ]);
-
-    if (businessTypeResult.status === "fulfilled") {
-      setBusinessTypes(businessTypeResult.value);
-    }
-
-    if (competitorResult.status === "fulfilled") {
-      setCompetitors(competitorResult.value);
+    try {
+      const [btList, compList] = await Promise.all([
+        apiService.getBusinessTypes(),
+        apiService.getCompetitors()
+      ]);
+      setBusinessTypes(btList);
+      setCompetitors(compList);
+    } catch {
+      showToast("Failed to load supporting master data", "info");
     }
   };
 
   useEffect(() => {
-    loadInitialData();
-  }, []);
+    if (subView.type === "list") {
+      void loadInitialData();
+    }
+  }, [subView.type]);
 
   useEffect(() => {
-    if (!hasLoadedCustomersRef.current || subView.type !== "list") return;
+    if (subView.type === "list" && hasLoadedCustomersRef.current) {
+      fetchCustomers(
+        page,
+        pageSize,
+        appliedQuery,
+        appliedBusinessType,
+        appliedSaleFilter,
+        appliedTelesaleFilter
+      );
+    }
+  }, [
+    page,
+    pageSize,
+    appliedQuery,
+    appliedBusinessType,
+    appliedSaleFilter,
+    appliedTelesaleFilter,
+    subView.type,
+    fetchCustomers
+  ]);
+
+  // Debounce search in CustomerWorkspace list view
+  useEffect(() => {
+    if (subView.type !== "list" || !hasLoadedCustomersRef.current) return;
 
     const timeoutId = window.setTimeout(() => {
+      setPage(1);
       setAppliedQuery(draftQuery);
-      void loadCustomers(draftQuery);
     }, SEARCH_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [draftQuery, loadCustomers, subView.type]);
+  }, [draftQuery, subView.type]);
 
   // Metrics
-  const metrics = useMemo(() => {
-    return {
-      total: customers.length,
-      unassigned: customers.filter(c => !c.sale_id && !c.telesale_id).length,
-      nearRenewal: customers.filter(c => c.renewalDays <= 30).length,
-      pendingCostSheets: customers.filter(c => !c.hasCostSheet).length
-    };
-  }, [customers]);
+  const metrics = backendMetrics;
 
-  // Filtered customers
+  // Filtered customers (with client-side fallback for test/mock environments returning raw arrays)
   const filteredCustomers = useMemo(() => {
+    // If backend pagination is fully active and has filtered the list, use it directly
+    if (backendMetrics.total > 0 && backendMetrics.total !== customers.length) {
+      return customers;
+    }
+    // Fallback to client-side filtering if raw array is returned (e.g., in unit tests)
     return customers.filter(c => {
+      const matchQuery = !appliedQuery || `${c.name} ${c.address}`.toLowerCase().includes(appliedQuery.toLowerCase());
       const matchBus = appliedBusinessType ? c.bt_type === appliedBusinessType : true;
       
       let matchSale = true;
       if (appliedSaleFilter === "assigned") matchSale = c.sale_id !== null;
       else if (appliedSaleFilter === "unassigned") matchSale = c.sale_id === null;
+      else if (appliedSaleFilter !== "all") {
+        matchSale = c.sale_id?.toString() === appliedSaleFilter;
+      }
 
       let matchTele = true;
       if (appliedTelesaleFilter === "assigned") matchTele = c.telesale_id !== null;
       else if (appliedTelesaleFilter === "unassigned") matchTele = c.telesale_id === null;
+      else if (appliedTelesaleFilter !== "all") {
+        matchTele = c.telesale_id?.toString() === appliedTelesaleFilter;
+      }
 
-      return matchBus && matchSale && matchTele;
+      return matchQuery && matchBus && matchSale && matchTele;
     });
-  }, [customers, appliedBusinessType, appliedSaleFilter, appliedTelesaleFilter]);
+  }, [customers, appliedQuery, appliedBusinessType, appliedSaleFilter, appliedTelesaleFilter, backendMetrics]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setPage(1);
     setAppliedQuery(draftQuery);
     setAppliedBusinessType(draftBusinessType);
     setAppliedSaleFilter(draftSaleFilter);
     setAppliedTelesaleFilter(draftTelesaleFilter);
-    void loadCustomers(draftQuery, true);
   };
 
   const handleClearSearch = () => {
+    setPage(1);
     setDraftQuery("");
     setDraftBusinessType("");
     setDraftSaleFilter("all");
@@ -212,7 +284,6 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     setAppliedBusinessType("");
     setAppliedSaleFilter("all");
     setAppliedTelesaleFilter("all");
-    void loadCustomers("", true);
   };
 
   // Helper: Get Username by ID
@@ -250,7 +321,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         });
         showToast(`Added customer: ${customerData.name}`, "success");
       }
-      await loadCustomers(appliedQuery, true);
+      refreshCustomers();
       setIsCustomerDrawerOpen(false);
     } catch (err) {
       showToast("Failed to save customer", "error");
@@ -261,7 +332,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     if (window.confirm(`Are you sure you want to delete customer "${name}"?`)) {
       try {
         await apiService.deleteCustomer(id);
-        await loadCustomers(appliedQuery, true);
+        refreshCustomers();
         showToast("Customer deleted successfully", "success");
       } catch (err) {
         showToast("Failed to delete customer", "error");
@@ -273,7 +344,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     const nextState = !c.is_active;
     try {
       await apiService.updateCustomer(c.id, { is_active: nextState });
-      await loadCustomers(appliedQuery, true);
+      refreshCustomers();
       showToast(`${c.name} ${nextState ? "Enabled" : "Disabled"} successfully`, "success");
     } catch (err) {
       showToast("Operation failed", "error");
@@ -291,7 +362,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     if (assignTargetCustomer) {
       try {
         await apiService.assignCustomer(assignTargetCustomer.id, userId, assignRole);
-        await loadCustomers(appliedQuery, true);
+        refreshCustomers();
         showToast(`Assigned ${assignRole} successfully`, "success");
       } catch (err) {
         showToast("Assignment failed", "error");
@@ -497,7 +568,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
           start_dt: new Date().toISOString().split("T")[0]
         });
       }
-      await loadCustomers(appliedQuery, true);
+      refreshCustomers();
       setImportPreviewRows([]);
       setIsImportModalOpen(false);
       showToast(`Successfully imported ${importPreviewRows.length} customers!`, "success");
@@ -770,6 +841,14 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   </tbody>
                 </table>
               </div>
+              <Pagination
+                page={page}
+                pageSize={pageSize}
+                totalCount={totalCount}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+              />
             </div>
           </main>
         </>

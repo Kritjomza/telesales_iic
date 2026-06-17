@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { History, ChevronDown, ChevronUp, AlertCircle, Calendar, FileSpreadsheet, User, CheckCircle, Database } from "lucide-react";
 import { apiService } from "../domain/apiService";
 import { ForbiddenView } from "./ForbiddenView";
 import { isAdminRole } from "../domain/permissions";
+import { Pagination } from "../components/Pagination";
 
 interface ImportHistoryViewProps {
   userRole: string;
@@ -14,25 +15,33 @@ export const ImportHistoryView: React.FC<ImportHistoryViewProps> = ({ userRole, 
   const [isLoading, setIsLoading] = useState(true);
   const [expandedSessionId, setExpandedSessionId] = useState<number | null>(null);
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+
   const isAdmin = isAdminRole(userRole);
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async (currentPage: number, currentPageSize: number) => {
     try {
       setIsLoading(true);
-      const data = await apiService.getImportHistory();
-      setHistoryList(data);
+      const res = await apiService.getImportHistoryPaginated({ page: currentPage, pageSize: currentPageSize });
+      setHistoryList(res.items);
+      setTotalCount(res.totalCount);
+      setTotalPages(res.totalPages);
     } catch (err: any) {
       showToast(err.message || "Failed to load import history.", "error");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     if (isAdmin) {
-      fetchHistory();
+      void fetchHistory(page, pageSize);
     }
-  }, [isAdmin]);
+  }, [isAdmin, page, pageSize, fetchHistory]);
 
   if (!isAdmin) {
     return <ForbiddenView />;
@@ -66,7 +75,7 @@ export const ImportHistoryView: React.FC<ImportHistoryViewProps> = ({ userRole, 
             </div>
             <button 
               className="secondary-button" 
-              onClick={fetchHistory} 
+              onClick={() => fetchHistory(page, pageSize)} 
               disabled={isLoading}
               type="button"
             >
@@ -120,7 +129,7 @@ export const ImportHistoryView: React.FC<ImportHistoryViewProps> = ({ userRole, 
                           }}
                           onClick={() => hasErrors && toggleExpand(session.id)}
                         >
-                          <td>{historyList.length - index}</td>
+                          <td>{totalCount - ((page - 1) * pageSize + index)}</td>
                           <td>
                             <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px" }}>
                               <Calendar size={14} style={{ color: "var(--text-muted)" }} />
@@ -203,6 +212,14 @@ export const ImportHistoryView: React.FC<ImportHistoryViewProps> = ({ userRole, 
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          />
         </div>
       </main>
     </div>

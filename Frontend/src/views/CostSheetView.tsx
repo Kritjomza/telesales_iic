@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, Check, X, ArrowLeft, Download, Send } from "lucide-react";
 import { apiService } from "../domain/apiService";
 import type { CostSheet, Customer, Brand, Product } from "../domain/types";
 import { ForbiddenView } from "./ForbiddenView";
 import { isAdminRole } from "../domain/permissions";
+import { Pagination } from "../components/Pagination";
 
 interface CostSheetViewProps {
   userRole: string;
@@ -23,6 +24,12 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
   const [selectedCostSheet, setSelectedCostSheet] = useState<CostSheet | null>(null);
   const [isForbidden, setIsForbidden] = useState(false);
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+
   // Form Fields
   const [selectedCustId, setSelectedCustId] = useState<number>(0);
   const [projectName, setProjectName] = useState("");
@@ -35,17 +42,19 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
   const [ownerShare, setOwnerShare] = useState(60);
   const [employeeShare, setEmployeeShare] = useState(40);
 
-  const loadData = async () => {
+  const loadData = useCallback(async (currentPage: number, currentPageSize: number) => {
     try {
       setIsLoading(true);
       setIsForbidden(false);
-      const [sheets, custs, brds, prods] = await Promise.all([
-        apiService.getCostSheets(),
+      const [res, custs, brds, prods] = await Promise.all([
+        apiService.getCostSheetsPaginated({ page: currentPage, pageSize: currentPageSize }),
         apiService.getCustomers(),
         apiService.getBrands(),
         apiService.getProducts()
       ]);
-      setCostSheets(sheets);
+      setCostSheets(res.items);
+      setTotalCount(res.totalCount);
+      setTotalPages(res.totalPages);
       setCustomers(custs);
       setBrands(brds);
       setProducts(prods);
@@ -58,11 +67,24 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast]);
+
+  const refreshCostSheets = useCallback(async () => {
+    try {
+      const res = await apiService.getCostSheetsPaginated({ page, pageSize });
+      setCostSheets(res.items);
+      setTotalCount(res.totalCount);
+      setTotalPages(res.totalPages);
+    } catch {
+      showToast("Failed to refresh Cost Sheets", "error");
+    }
+  }, [page, pageSize, showToast]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (mode === "list") {
+      void loadData(page, pageSize);
+    }
+  }, [page, pageSize, mode, loadData]);
 
   // Computed values during creation
   const brandProducts = useMemo(() => {
@@ -137,8 +159,7 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
         status: "Pending"
       });
 
-      const refreshed = await apiService.getCostSheets();
-      setCostSheets(refreshed);
+      await refreshCostSheets();
       setSelectedCostSheet(sheet);
       setMode("preview");
       showToast("Cost Sheet created successfully", "success");
@@ -151,8 +172,7 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
     if (window.confirm("Are you sure you want to delete this Cost Sheet?")) {
       try {
         await apiService.deleteCostSheet(id);
-        const refreshed = await apiService.getCostSheets();
-        setCostSheets(refreshed);
+        await refreshCostSheets();
         showToast("Cost Sheet deleted successfully", "success");
       } catch (err) {
         showToast("Failed to delete Cost Sheet", "error");
@@ -163,8 +183,7 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
   const handleUpdateStatus = async (id: number, status: "Approved" | "Rejected") => {
     try {
       await apiService.updateCostSheetStatus(id, status);
-      const refreshed = await apiService.getCostSheets();
-      setCostSheets(refreshed);
+      await refreshCostSheets();
       if (selectedCostSheet) {
         setSelectedCostSheet({ ...selectedCostSheet, status });
       }
@@ -244,7 +263,7 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
                         const netSale = Math.max(0, grossSale - item.discount);
                         return (
                           <tr key={item.id}>
-                            <td>{index + 1}</td>
+                            <td>{(page - 1) * pageSize + index + 1}</td>
                             <td><strong>{getCustomerName(item.cust_id)}</strong></td>
                             <td>{item.project_name}</td>
                             <td>{netSale.toLocaleString()} THB</td>
@@ -288,6 +307,14 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
                   </tbody>
                 </table>
               </div>
+              <Pagination
+                page={page}
+                pageSize={pageSize}
+                totalCount={totalCount}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+              />
             </div>
           </main>
         </>
