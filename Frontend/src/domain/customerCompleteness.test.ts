@@ -46,17 +46,13 @@ describe("getCustomerMissingFields", () => {
     expect(getCustomerMissingFields(customer({ phone: "", primary_contact_tel: "0812345678" }))).not.toContain("phone");
   });
 
-  it("detects missing contact, business type, address components, email, and product license data", () => {
+  it("detects missing contact, business type, address, email, and product license data", () => {
     expect(
       getCustomerMissingFields(
         customer({
           primary_contact_name: "",
           bt_type: "",
           address: "   ",
-          subdistrict: "",
-          district: " ",
-          province: "",
-          postal_code: "",
           primary_contact_email: null,
           hasProductLicenseInfo: false
         })
@@ -65,20 +61,17 @@ describe("getCustomerMissingFields", () => {
       "contact",
       "businessType",
       "address",
-      "subdistrict",
-      "district",
-      "province",
-      "postalCode",
       "email",
       "productLicense"
     ]);
   });
 
-  it("treats missing address components as no address for quick filtering", () => {
-    expect(customerMatchesQuickFilter(customer({ subdistrict: "" }), "noAddress")).toBe(true);
-    expect(customerMatchesQuickFilter(customer({ district: "" }), "noAddress")).toBe(true);
-    expect(customerMatchesQuickFilter(customer({ province: "" }), "noAddress")).toBe(true);
-    expect(customerMatchesQuickFilter(customer({ postal_code: "" }), "noAddress")).toBe(true);
+  it("only treats missing main address as no address for quick filtering", () => {
+    expect(customerMatchesQuickFilter(customer({ address: "" }), "noAddress")).toBe(true);
+    expect(customerMatchesQuickFilter(customer({ address: "Bangkok", subdistrict: "" }), "noAddress")).toBe(false);
+    expect(customerMatchesQuickFilter(customer({ address: "Bangkok", district: "" }), "noAddress")).toBe(false);
+    expect(customerMatchesQuickFilter(customer({ address: "Bangkok", province: "" }), "noAddress")).toBe(false);
+    expect(customerMatchesQuickFilter(customer({ address: "Bangkok", postal_code: "" }), "noAddress")).toBe(false);
   });
 
   it("does not require product license data when the response omits that capability", () => {

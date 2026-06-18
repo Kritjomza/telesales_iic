@@ -18,13 +18,13 @@ type Permission =
   | "costSheet";
 
 const rolePermissions: Record<Exclude<CanonicalRole, "">, Permission[]> = {
-  "Super Admin": ["masterData", "customerManage", "booking", "reports", "costSheet"],
-  Admin: ["masterData", "customerManage", "booking", "reports", "costSheet"],
-  Manager: ["customerManage", "booking", "reports", "costSheet"],
-  Supervisor: ["customerManage", "booking", "reports", "costSheet"],
-  Sale: ["customerManage", "booking", "costSheet"],
-  "Tele Sale": ["customerManage", "booking", "costSheet"],
-  Viewer: ["customerManage", "booking", "reports"]
+  "Super Admin": ["masterData", "customerManage", "reports"],
+  Admin: ["masterData", "customerManage", "reports"],
+  Manager: ["customerManage", "reports"],
+  Supervisor: ["customerManage", "reports"],
+  Sale: ["customerManage"],
+  "Tele Sale": ["customerManage"],
+  Viewer: ["customerManage", "reports"]
 };
 
 const groupPermissions: Record<string, Permission> = {

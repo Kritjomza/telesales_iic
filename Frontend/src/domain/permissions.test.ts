@@ -12,13 +12,13 @@ describe("role permissions", () => {
     expect(canAccessGroup("Master Data", "Super Admin")).toBe(true);
     expect(canAccessGroup("Customer", "Super Admin")).toBe(true);
     expect(canAccessGroup("Report", "Super Admin")).toBe(true);
-    expect(canAccessGroup("Sale Manager", "Super Admin")).toBe(true);
+    expect(canAccessGroup("Sale Manager", "Super Admin")).toBe(false);
   });
 
   it("limits Tele Sale to daily workflow menus", () => {
     expect(canAccessGroup("Customer", "Tele sale")).toBe(true);
     expect(canAccessView("manage", "Tele sale")).toBe(true);
-    expect(canAccessView("booking", "Tele sale")).toBe(true);
+    expect(canAccessView("booking", "Tele sale")).toBe(false);
     expect(canAccessGroup("Master Data", "Tele sale")).toBe(false);
     expect(canAccessGroup("Report", "Tele sale")).toBe(false);
   });

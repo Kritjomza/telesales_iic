@@ -28,6 +28,8 @@ public class CustomersController : ControllerBase
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
         [FromQuery] string? search,
+        [FromQuery] string? completeness,
+        [FromQuery] string? missingField,
         CancellationToken cancellationToken)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
@@ -42,7 +44,7 @@ public class CustomersController : ControllerBase
         var searchTerm = CustomerSearch.NormalizeMultiToken(search);
         if (searchTerm != null)
         {
-            return await SearchCustomers(query, searchTerm, page, pageSize, today, cancellationToken);
+            return await SearchCustomers(query, searchTerm, page, pageSize, today, completeness, missingField, cancellationToken);
         }
 
         if (page.HasValue)
@@ -52,10 +54,13 @@ public class CustomersController : ControllerBase
             if (size > 100) return BadRequest("Page size cannot exceed 100.");
             if (page.Value <= 0) return BadRequest("Page number must be greater than zero.");
 
-            var totalCount = await query.CountAsync(cancellationToken);
+            var metrics = await CalculateMetricsAsync(query, today, cancellationToken);
+            var filteredQuery = ApplyCompletenessFilters(query, completeness, missingField);
+
+            var totalCount = await filteredQuery.CountAsync(cancellationToken);
             var totalPages = (int)Math.Ceiling((double)totalCount / size);
 
-            var rawItems = await query.AsNoTracking()
+            var rawItems = await filteredQuery.AsNoTracking()
                 .OrderBy(c => c.id)
                 .Skip((page.Value - 1) * size)
                 .Take(size)
@@ -121,12 +126,14 @@ public class CustomersController : ControllerBase
                 totalCount,
                 page = page.Value,
                 pageSize = size,
-                totalPages
+                totalPages,
+                metrics
             });
         }
         else
         {
-            var rawItems = await query.AsNoTracking()
+            var filteredQuery = ApplyCompletenessFilters(query, completeness, missingField);
+            var rawItems = await filteredQuery.AsNoTracking()
                 .OrderBy(c => c.id)
                 .Take(500)
                 .Select(c => new
@@ -195,6 +202,8 @@ public class CustomersController : ControllerBase
         int? page,
         int? pageSize,
         DateOnly today,
+        string? completeness,
+        string? missingField,
         CancellationToken cancellationToken)
     {
         var size = pageSize ?? (page.HasValue ? 10 : 100);
@@ -202,17 +211,20 @@ public class CustomersController : ControllerBase
         if (size > 100) return BadRequest("Page size cannot exceed 100.");
         if (page.HasValue && page.Value <= 0) return BadRequest("Page number must be greater than zero.");
 
+        var metrics = page.HasValue ? await CalculateMetricsAsync(scopedQuery, today, cancellationToken) : null;
+        var filteredQuery = ApplyCompletenessFilters(scopedQuery, completeness, missingField);
+
         var candidateLimit = page.HasValue
             ? Math.Min(1000, Math.Max(size * page.Value * 4, 200))
             : 1000;
 
         var predicate = BuildCustomerSearchPredicate(searchTerm);
-        var directCandidates = await ProjectCustomerRows(scopedQuery.Where(predicate), candidateLimit, cancellationToken);
+        var directCandidates = await ProjectCustomerRows(filteredQuery.Where(predicate), candidateLimit, cancellationToken);
 
         var rowsById = directCandidates.ToDictionary(c => c.Customer.id);
         if (rowsById.Count < candidateLimit)
         {
-            var fallbackRows = await ProjectCustomerRows(scopedQuery, candidateLimit, cancellationToken);
+            var fallbackRows = await ProjectCustomerRows(filteredQuery, candidateLimit, cancellationToken);
             foreach (var row in fallbackRows)
             {
                 rowsById.TryAdd(row.Customer.id, row);
@@ -295,7 +307,8 @@ public class CustomersController : ControllerBase
                 totalCount,
                 page = page.Value,
                 pageSize = size,
-                totalPages
+                totalPages,
+                metrics
             });
         }
 
@@ -1311,6 +1324,149 @@ public class CustomersController : ControllerBase
             projectLedger,
             agentPerformance
         });
+    }
+
+    private async Task<object> CalculateMetricsAsync(IQueryable<customer> query, DateOnly today, CancellationToken cancellationToken)
+    {
+        var allCustomers = await query.AsNoTracking().Select(c => new {
+            c.id,
+            c.phone,
+            c.address,
+            c.business_type_id,
+            c.start_dt,
+            primary_contact_name = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault(),
+            primary_contact_tel = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault(),
+            primary_contact_email = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault(),
+            hasProductLicenseInfo = _db.details.Any(d => d.cust_id == c.id && _db.detail_devices.Any(dd => dd.dtl_id == d.id))
+        }).ToListAsync(cancellationToken);
+
+        var total = allCustomers.Count;
+        var completeCount = 0;
+        var incompleteCount = 0;
+        var nearRenewal = 0;
+
+        foreach (var c in allCustomers)
+        {
+            bool hasPhone = !string.IsNullOrWhiteSpace(c.phone) || !string.IsNullOrWhiteSpace(c.primary_contact_tel);
+            bool hasContact = !string.IsNullOrWhiteSpace(c.primary_contact_name);
+            bool hasBusinessType = c.business_type_id != null && c.business_type_id > 0;
+            bool hasAddress = !string.IsNullOrWhiteSpace(c.address);
+            bool hasEmail = !string.IsNullOrWhiteSpace(c.primary_contact_email);
+            bool hasLicense = c.hasProductLicenseInfo;
+
+            bool isComplete = hasPhone && hasContact && hasBusinessType && hasAddress && hasEmail && hasLicense;
+            if (isComplete) completeCount++;
+            else incompleteCount++;
+
+            if (c.start_dt.HasValue)
+            {
+                var renewalDate = c.start_dt.Value.AddYears(1);
+                var daysToRenewal = renewalDate.DayNumber - today.DayNumber;
+                if (daysToRenewal >= 0 && daysToRenewal <= 30)
+                {
+                    nearRenewal++;
+                }
+            }
+        }
+
+        return new
+        {
+            total,
+            complete = completeCount,
+            incomplete = incompleteCount,
+            nearRenewal
+        };
+    }
+
+    private IQueryable<customer> ApplyCompletenessFilters(
+        IQueryable<customer> query,
+        string? completeness,
+        string? missingField)
+    {
+        if (string.IsNullOrEmpty(completeness) && string.IsNullOrEmpty(missingField))
+        {
+            return query;
+        }
+
+        if (!string.IsNullOrEmpty(completeness))
+        {
+            if (completeness.Equals("complete", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(c =>
+                    // hasPhone
+                    ((c.phone != null && c.phone.Trim() != "") || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() != null && _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() != "") &&
+                    // hasContact
+                    (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault() != null && _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault() != "") &&
+                    // hasBusinessType
+                    (c.business_type_id != null && c.business_type_id > 0) &&
+                    // hasAddress
+                    (c.address != null && c.address.Trim() != "") &&
+                    // hasEmail
+                    (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault() != null && _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault() != "") &&
+                    // hasLicense
+                    (_db.details.Any(d => d.cust_id == c.id && _db.detail_devices.Any(dd => dd.dtl_id == d.id)))
+                );
+            }
+            else if (completeness.Equals("incomplete", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(c =>
+                    // !hasPhone
+                    ((c.phone == null || c.phone.Trim() == "") && (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() == "")) ||
+                    // !hasContact
+                    (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault() == "") ||
+                    // !hasBusinessType
+                    (c.business_type_id == null || c.business_type_id <= 0) ||
+                    // !hasAddress
+                    (c.address == null || c.address.Trim() == "") ||
+                    // !hasEmail
+                    (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault() == "") ||
+                    // !hasLicense
+                    (!_db.details.Any(d => d.cust_id == c.id && _db.detail_devices.Any(dd => dd.dtl_id == d.id)))
+                );
+            }
+        }
+
+        if (!string.IsNullOrEmpty(missingField))
+        {
+            if (missingField.Equals("noPhone", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(c =>
+                    (c.phone == null || c.phone.Trim() == "") && (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() == "")
+                );
+            }
+            else if (missingField.Equals("noContact", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(c =>
+                    _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault() == ""
+                );
+            }
+            else if (missingField.Equals("noBusinessType", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(c =>
+                    c.business_type_id == null || c.business_type_id <= 0
+                );
+            }
+            else if (missingField.Equals("noAddress", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(c =>
+                    c.address == null || c.address.Trim() == ""
+                );
+            }
+            else if (missingField.Equals("noEmail", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(c =>
+                    _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault() == ""
+                );
+            }
+            else if (missingField.Equals("noProductLicense", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(c =>
+                    !_db.details.Any(d => d.cust_id == c.id && _db.detail_devices.Any(dd => dd.dtl_id == d.id))
+                );
+            }
+        }
+
+        return query;
     }
 
     private async Task RecalculatePoints(uint dtlId, CancellationToken cancellationToken)

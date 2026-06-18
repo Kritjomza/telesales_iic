@@ -114,9 +114,11 @@ describe("ATS React workspace", () => {
 
     expect(screen.getByRole("heading", { name: /customer workspace/i })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: /primary navigation/i })).toHaveTextContent("Master Data");
-    expect(screen.getByRole("navigation", { name: /primary navigation/i })).toHaveTextContent("Cost Sheet");
+    expect(screen.getByRole("navigation", { name: /primary navigation/i })).not.toHaveTextContent("Cost Sheet");
+    expect(screen.getByRole("navigation", { name: /primary navigation/i })).not.toHaveTextContent("Booking");
     expect(screen.getByText("Total Customers")).toBeInTheDocument();
-    expect(screen.getByText("Pending Cost Sheets")).toBeInTheDocument();
+    expect(screen.getByText("Complete Data")).toBeInTheDocument();
+    expect(screen.getByText("Incomplete Data")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/customer name or address/i), "bangkok");
     await user.selectOptions(screen.getByLabelText(/business type/i), "Commercial");
@@ -294,5 +296,44 @@ describe("ATS React workspace", () => {
 
     await screen.findByText("Access Denied");
     expect(screen.getByText("Reload Console")).toBeInTheDocument();
+  });
+
+  it("renders completeness filter chips, missing fields select, and status badges", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    // Wait for the data to load
+    await screen.findByText("Apex Manufacturing");
+
+    // 1. Verify filter elements are in the document
+    expect(screen.getByText("Completeness:")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^all$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^incomplete$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^complete$/i })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /filter by missing field/i })).toBeInTheDocument();
+
+    // 2. Verify status badge is displayed in each row
+    // Since Apex Manufacturing is incomplete (lacks phone), it should have an "Incomplete" badge
+    const rows = screen.getAllByRole("row");
+    const apexRow = rows.find(r => r.textContent?.includes("Apex Manufacturing"));
+    expect(apexRow).toBeDefined();
+    expect(within(apexRow!).getByText("Incomplete")).toBeInTheDocument();
+
+    // 3. Click the Info button for Apex Manufacturing and verify popover opens
+    const infoButton = within(apexRow!).getByRole("button", { name: /show missing fields for apex manufacturing/i });
+    expect(infoButton).toBeInTheDocument();
+    await user.click(infoButton);
+
+    // Verify popover displays missing fields
+    expect(screen.getByRole("heading", { name: /missing fields/i })).toBeInTheDocument();
+    expect(screen.getByText("Phone")).toBeInTheDocument();
+    expect(screen.queryByText("Address")).not.toBeInTheDocument();
+
+    // 4. Click the "Complete" filter pill
+    const completePill = screen.getByRole("button", { name: /^complete$/i });
+    await user.click(completePill);
+
+    // Since all three mock customers are incomplete, the table should show No customers found.
+    expect(screen.getByText("No customers found.")).toBeInTheDocument();
   });
 });

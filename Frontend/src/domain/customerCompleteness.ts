@@ -66,22 +66,6 @@ export const getCustomerMissingFields = (customer: Customer): MissingField[] => 
     missing.push("address");
   }
 
-  if (!hasValue(customer.subdistrict)) {
-    missing.push("subdistrict");
-  }
-
-  if (!hasValue(customer.district)) {
-    missing.push("district");
-  }
-
-  if (!hasValue(customer.province)) {
-    missing.push("province");
-  }
-
-  if (!hasValue(customer.postal_code)) {
-    missing.push("postalCode");
-  }
-
   if (responseHasField(customer, "primary_contact_email") && !hasValue(customer.primary_contact_email)) {
     missing.push("email");
   }
@@ -103,15 +87,7 @@ export const customerMatchesQuickFilter = (customer: Customer, filter: CustomerQ
   if (filter === "noPhone") return missingFields.includes("phone");
   if (filter === "noContact") return missingFields.includes("contact");
   if (filter === "noBusinessType") return missingFields.includes("businessType");
-  if (filter === "noAddress") {
-    return missingFields.some(field =>
-      field === "address" ||
-      field === "subdistrict" ||
-      field === "district" ||
-      field === "province" ||
-      field === "postalCode"
-    );
-  }
+  if (filter === "noAddress") return missingFields.includes("address");
   if (filter === "noEmail") return missingFields.includes("email");
   if (filter === "noProductLicense") return missingFields.includes("productLicense");
 

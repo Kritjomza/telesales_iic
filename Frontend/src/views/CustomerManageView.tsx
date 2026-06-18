@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { 
   Users, UserCheck, ShieldCheck, FileText, Search, Plus, 
-  FileDown, Pencil, Trash2, ArrowLeft, Laptop, Target, Check, AlertCircle 
+  FileDown, Pencil, Trash2, ArrowLeft, Laptop, Target, Check, AlertCircle, Info 
 } from "lucide-react";
 import { apiService } from "../domain/apiService";
 import type { Customer, ContactDetail, DetailDevice, DetailProject, User, Category, Competitor } from "../domain/types";
@@ -10,6 +10,12 @@ import { AssigneeModal } from "../components/AssigneeModal";
 import { ForbiddenView } from "./ForbiddenView";
 import { Pagination } from "../components/Pagination";
 import { canManageAssignments, isAdminRole, isAgentRole, isSupervisorRole } from "../domain/permissions";
+import { 
+  customerMatchesQuickFilter, 
+  getCustomerMissingFields, 
+  hasProductLicenseCompletenessData, 
+  type CustomerQuickFilter 
+} from "../domain/customerCompleteness";
 
 interface CustomerManageViewProps {
   userRole: string;
@@ -54,6 +60,11 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
   const [appliedSaleFilter, setAppliedSaleFilter] = useState("all");
   const [appliedTelesaleFilter, setAppliedTelesaleFilter] = useState("all");
 
+  // States for completeness and missing-field filtering
+  const [completenessFilter, setCompletenessFilter] = useState<"all" | "incomplete" | "complete">("all");
+  const [missingFieldFilter, setMissingFieldFilter] = useState<CustomerQuickFilter | "all">("all");
+  const [openPopoverCustomerId, setOpenPopoverCustomerId] = useState<number | null>(null);
+
   // Drawer / Modal triggers
   const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
   const [activeCustomer, setActiveCustomer] = useState<Customer | null>(null); // null means "Add New"
@@ -89,7 +100,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     total: 0,
     unassigned: 0,
     nearRenewal: 0,
-    pendingCostSheets: 0
+    pendingCostSheets: 0,
+    complete: 0,
+    incomplete: 0
   });
 
   const fetchCustomers = useCallback(async (
@@ -119,7 +132,14 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         setTotalCount(res.totalCount);
         setTotalPages(res.totalPages);
         if (res.metrics) {
-          setBackendMetrics(res.metrics);
+          setBackendMetrics({
+            total: res.metrics.total,
+            unassigned: res.metrics.unassigned ?? 0,
+            nearRenewal: res.metrics.nearRenewal,
+            pendingCostSheets: res.metrics.pendingCostSheets ?? 0,
+            complete: res.metrics.complete ?? 0,
+            incomplete: res.metrics.incomplete ?? 0
+          });
         }
       }
     } catch (err: any) {
@@ -162,7 +182,14 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
       setTotalCount(res.totalCount);
       setTotalPages(res.totalPages);
       if (res.metrics) {
-        setBackendMetrics(res.metrics);
+        setBackendMetrics({
+          total: res.metrics.total,
+          unassigned: res.metrics.unassigned ?? 0,
+          nearRenewal: res.metrics.nearRenewal,
+          pendingCostSheets: res.metrics.pendingCostSheets ?? 0,
+          complete: res.metrics.complete ?? 0,
+          incomplete: res.metrics.incomplete ?? 0
+        });
       }
       setUsers(uList);
       hasLoadedCustomersRef.current = true;
@@ -192,6 +219,17 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
       showToast("Failed to load supporting master data", "info");
     }
   };
+
+  // Close missing fields popover when clicking anywhere else
+  useEffect(() => {
+    const handleDocumentClick = () => {
+      setOpenPopoverCustomerId(null);
+    };
+    document.addEventListener("click", handleDocumentClick);
+    return () => {
+      document.removeEventListener("click", handleDocumentClick);
+    };
+  }, []);
 
   useEffect(() => {
     if (subView.type === "list") {
@@ -238,32 +276,52 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
 
   // Filtered customers (with client-side fallback for test/mock environments returning raw arrays)
   const filteredCustomers = useMemo(() => {
-    // If backend pagination is fully active and has filtered the list, use it directly
-    if (backendMetrics.total > 0 && backendMetrics.total !== customers.length) {
-      return customers;
+    let list = customers;
+
+    // Apply backend-filtering client-side logic only if not already filtered by backend
+    const isBackendFiltered = backendMetrics.total > 0 && backendMetrics.total !== customers.length;
+    if (!isBackendFiltered) {
+      list = list.filter(c => {
+        const matchQuery = !appliedQuery || `${c.name} ${c.address}`.toLowerCase().includes(appliedQuery.toLowerCase());
+        const matchBus = appliedBusinessType ? c.bt_type === appliedBusinessType : true;
+        
+        let matchSale = true;
+        if (appliedSaleFilter === "assigned") matchSale = c.sale_id !== null;
+        else if (appliedSaleFilter === "unassigned") matchSale = c.sale_id === null;
+        else if (appliedSaleFilter !== "all") {
+          matchSale = c.sale_id?.toString() === appliedSaleFilter;
+        }
+
+        let matchTele = true;
+        if (appliedTelesaleFilter === "assigned") matchTele = c.telesale_id !== null;
+        else if (appliedTelesaleFilter === "unassigned") matchTele = c.telesale_id === null;
+        else if (appliedTelesaleFilter !== "all") {
+          matchTele = c.telesale_id?.toString() === appliedTelesaleFilter;
+        }
+
+        return matchQuery && matchBus && matchSale && matchTele;
+      });
     }
-    // Fallback to client-side filtering if raw array is returned (e.g., in unit tests)
-    return customers.filter(c => {
-      const matchQuery = !appliedQuery || `${c.name} ${c.address}`.toLowerCase().includes(appliedQuery.toLowerCase());
-      const matchBus = appliedBusinessType ? c.bt_type === appliedBusinessType : true;
-      
-      let matchSale = true;
-      if (appliedSaleFilter === "assigned") matchSale = c.sale_id !== null;
-      else if (appliedSaleFilter === "unassigned") matchSale = c.sale_id === null;
-      else if (appliedSaleFilter !== "all") {
-        matchSale = c.sale_id?.toString() === appliedSaleFilter;
-      }
 
-      let matchTele = true;
-      if (appliedTelesaleFilter === "assigned") matchTele = c.telesale_id !== null;
-      else if (appliedTelesaleFilter === "unassigned") matchTele = c.telesale_id === null;
-      else if (appliedTelesaleFilter !== "all") {
-        matchTele = c.telesale_id?.toString() === appliedTelesaleFilter;
-      }
+    // Apply completeness filtering client-side
+    if (completenessFilter !== "all") {
+      list = list.filter(c => customerMatchesQuickFilter(c, completenessFilter));
+    }
+    if (missingFieldFilter !== "all") {
+      list = list.filter(c => customerMatchesQuickFilter(c, missingFieldFilter));
+    }
 
-      return matchQuery && matchBus && matchSale && matchTele;
-    });
-  }, [customers, appliedQuery, appliedBusinessType, appliedSaleFilter, appliedTelesaleFilter, backendMetrics]);
+    return list;
+  }, [
+    customers, 
+    appliedQuery, 
+    appliedBusinessType, 
+    appliedSaleFilter, 
+    appliedTelesaleFilter, 
+    backendMetrics, 
+    completenessFilter, 
+    missingFieldFilter
+  ]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -284,6 +342,8 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     setAppliedBusinessType("");
     setAppliedSaleFilter("all");
     setAppliedTelesaleFilter("all");
+    setCompletenessFilter("all");
+    setMissingFieldFilter("all");
   };
 
   // Helper: Get Username by ID
@@ -617,11 +677,18 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   <strong>{metrics.total}</strong>
                 </div>
               </div>
-              <div className="metric-card amber">
-                <div className="metric-icon"><UserCheck size={18} /></div>
+              <div className="metric-card teal">
+                <div className="metric-icon"><Check size={18} /></div>
                 <div>
-                  <span>Unassigned</span>
-                  <strong>{metrics.unassigned}</strong>
+                  <span>Complete Data</span>
+                  <strong>{metrics.complete}</strong>
+                </div>
+              </div>
+              <div className="metric-card amber">
+                <div className="metric-icon"><AlertCircle size={18} /></div>
+                <div>
+                  <span>Incomplete Data</span>
+                  <strong>{metrics.incomplete}</strong>
                 </div>
               </div>
               <div className="metric-card red">
@@ -629,13 +696,6 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                 <div>
                   <span>Near Renewal (30d)</span>
                   <strong>{metrics.nearRenewal}</strong>
-                </div>
-              </div>
-              <div className="metric-card teal">
-                <div className="metric-icon"><FileText size={18} /></div>
-                <div>
-                  <span>Pending Cost Sheets</span>
-                  <strong>{metrics.pendingCostSheets}</strong>
                 </div>
               </div>
             </section>
@@ -700,6 +760,80 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   </button>
                 </div>
               </form>
+
+              <div 
+                className="completeness-filter-row" 
+                style={{ 
+                  display: "flex", 
+                  justifyContent: "space-between", 
+                  alignItems: "center", 
+                  marginTop: "12px", 
+                  paddingTop: "12px", 
+                  borderTop: "1px solid var(--border)",
+                  gap: "16px",
+                  flexWrap: "wrap"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--text-muted)" }}>
+                    Completeness:
+                  </span>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    {[
+                      { id: "all", label: "All" },
+                      { id: "incomplete", label: "Incomplete" },
+                      { id: "complete", label: "Complete" }
+                    ].map(opt => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={`filter-pill ${completenessFilter === opt.id ? "active" : ""}`}
+                        onClick={() => {
+                          setCompletenessFilter(opt.id as any);
+                          setPage(1);
+                        }}
+                        style={{ height: "26px", padding: "0 10px", borderRadius: "13px", fontSize: "11px" }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--text-muted)" }}>
+                    Missing Field Filter:
+                  </span>
+                  <select
+                    value={missingFieldFilter}
+                    onChange={(e) => {
+                      setMissingFieldFilter(e.target.value as any);
+                      setPage(1);
+                    }}
+                    aria-label="Filter by missing field"
+                    style={{ 
+                      height: "30px", 
+                      padding: "4px 8px", 
+                      borderRadius: "6px", 
+                      border: "1px solid var(--border)", 
+                      fontSize: "12px", 
+                      background: "#ffffff", 
+                      color: "var(--primary)",
+                      minWidth: "160px"
+                    }}
+                  >
+                    <option value="all">All Fields</option>
+                    <option value="noPhone">No Phone</option>
+                    <option value="noContact">No Contact</option>
+                    <option value="noBusinessType">No Business Type</option>
+                    <option value="noAddress">No Address</option>
+                    <option value="noEmail">No Email</option>
+                    {hasProductLicenseCompletenessData(customers) && (
+                      <option value="noProductLicense">No Product / License Info</option>
+                    )}
+                  </select>
+                </div>
+              </div>
 
               {/* Customer Table */}
               <div className="table-wrap">
@@ -789,6 +923,109 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                           )}
                           <td style={{ textAlign: "right" }}>
                             <div className="row-actions">
+                              {(() => {
+                                const missingFields = getCustomerMissingFields(c);
+                                const isComplete = missingFields.length === 0;
+                                return isComplete ? (
+                                  <span className="status-badge approved" title="ข้อมูลครบถ้วน" style={{ height: "20px", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "10px", padding: "0 6px" }}>
+                                    <Check size={12} style={{ color: "#15803d" }} /> Complete
+                                  </span>
+                                ) : (
+                                  <span className="status-badge wait" title="ข้อมูลไม่ครบถ้วน" style={{ height: "20px", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "10px", padding: "0 6px" }}>
+                                    <AlertCircle size={12} style={{ color: "#b45309" }} /> Incomplete
+                                  </span>
+                                );
+                              })()}
+
+                              <div style={{ position: "relative", display: "inline-flex" }}>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenPopoverCustomerId(prev => prev === c.id ? null : c.id);
+                                  }}
+                                  aria-label={`Show missing fields for ${c.name}`}
+                                >
+                                  <Info size={14} />
+                                </button>
+                                
+                                {openPopoverCustomerId === c.id && (
+                                  <div 
+                                    className="missing-fields-popover"
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                      position: "absolute",
+                                      right: 0,
+                                      top: "100%",
+                                      marginTop: "6px",
+                                      zIndex: 100,
+                                      width: "200px",
+                                      backgroundColor: "#ffffff",
+                                      border: "1px solid var(--border)",
+                                      borderRadius: "6px",
+                                      boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
+                                      padding: "12px",
+                                      textAlign: "left",
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      gap: "8px"
+                                    }}
+                                  >
+                                    <h4 style={{ fontSize: "11px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--text-muted)", margin: 0 }}>
+                                      Missing Fields
+                                    </h4>
+                                    {(() => {
+                                      const missingFields = getCustomerMissingFields(c);
+                                      const grouped = [];
+                                      if (missingFields.includes("phone")) grouped.push("Phone");
+                                      if (missingFields.includes("contact")) grouped.push("Contact");
+                                      if (missingFields.includes("businessType")) grouped.push("Business Type");
+                                      if (
+                                        missingFields.includes("address") ||
+                                        missingFields.includes("subdistrict") ||
+                                        missingFields.includes("district") ||
+                                        missingFields.includes("province") ||
+                                        missingFields.includes("postalCode")
+                                      ) {
+                                        grouped.push("Address");
+                                      }
+                                      if (missingFields.includes("email")) grouped.push("Email");
+                                      if (missingFields.includes("productLicense")) grouped.push("Product / License");
+
+                                      if (grouped.length > 0) {
+                                        return (
+                                          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                                            {grouped.map((field, idx) => (
+                                              <span 
+                                                key={idx} 
+                                                className="status-badge wait" 
+                                                style={{ 
+                                                  fontSize: "10px", 
+                                                  height: "18px", 
+                                                  lineHeight: "16px",
+                                                  backgroundColor: "#fffbeb",
+                                                  borderColor: "#fcd34d",
+                                                  color: "#b45309",
+                                                  padding: "0 6px"
+                                                }}
+                                              >
+                                                {field}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        );
+                                      } else {
+                                        return (
+                                          <span style={{ fontSize: "11px", color: "#15803d", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
+                                            <Check size={12} /> ข้อมูลครบถ้วน
+                                          </span>
+                                        );
+                                      }
+                                    })()}
+                                  </div>
+                                )}
+                              </div>
+
                               {(c.status === "Assigned" || c.status === "REPLACE" || c.status === "Booking" || c.status === "Win" || c.status === "Sent" || c.status === "Wait") && (
                                 <button
                                   className="action-pill blue"

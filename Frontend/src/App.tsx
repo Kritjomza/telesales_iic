@@ -225,6 +225,10 @@ function App() {
                   <div className="nav-children">
                     {group.items
                       .filter(item => {
+                        const viewKey = group.label === "Master Data" ? "master-data" : item.key;
+                        if (!canAccessView(viewKey, currentUser.roles)) {
+                          return false;
+                        }
                         if (group.label === "Master Data" && normalizeRole(currentUser.roles) === "Manager") {
                           return item.name === "Brand" || item.name === "Product";
                         }

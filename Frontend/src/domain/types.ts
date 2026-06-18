@@ -146,8 +146,10 @@ export interface PaginatedResponse<T> {
   totalPages: number;
   metrics?: {
     total: number;
-    unassigned: number;
+    unassigned?: number;
     nearRenewal: number;
-    pendingCostSheets: number;
+    pendingCostSheets?: number;
+    complete?: number;
+    incomplete?: number;
   };
 }
