@@ -142,9 +142,9 @@ export const apiService = {
     searchParams.append("page", params.page.toString());
     searchParams.append("pageSize", params.pageSize.toString());
     if (params.search) {
-      const clean = params.search.trim().replace(/\s+/g, "+");
+      const clean = params.search.trim();
       if (clean) {
-        searchParams.append("search", `+${clean}+`);
+        searchParams.append("search", clean);
       }
     }
     if (params.businessType) searchParams.append("businessType", params.businessType);
@@ -198,18 +198,6 @@ export const apiService = {
     });
   },
 
-  async assignCustomer(id: number, userId: number, role: "Sale" | "Tele sale"): Promise<Customer> {
-    return request<Customer>(`/customers/${id}/assign`, {
-      method: "PUT",
-      body: JSON.stringify({ userId, role })
-    });
-  },
-
-  async bookCustomer(id: number): Promise<Customer> {
-    return request<Customer>(`/customers/${id}/book`, {
-      method: "PUT"
-    });
-  },
 
   // Contact Details
   async getContactDetails(custId: number): Promise<ContactDetail[]> {

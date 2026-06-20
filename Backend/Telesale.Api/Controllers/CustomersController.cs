@@ -613,104 +613,13 @@ public class CustomersController : ControllerBase
     [HttpPut("{id}/assign")]
     public async Task<IActionResult> AssignCustomer(uint id, [FromBody] CustomerAssignDto dto, CancellationToken cancellationToken)
     {
-        var role = User.GetUserRole();
-        if (!User.CanManageAssignments())
-        {
-            return Forbid();
-        }
-
-        dto.role = AppRoles.Normalize(dto.role);
-        if (dto.role != AppRoles.Sale && dto.role != AppRoles.TeleSale)
-        {
-            return BadRequest(new { message = "Assignment role must be Sale or Tele Sale." });
-        }
-
-        var c = await _db.customers.FindAsync(new object[] { id }, cancellationToken);
-        if (c == null)
-        {
-            return User.IsAdmin() ? NotFound() : Forbid();
-        }
-
-        if (!await HasCustomerAccess(c, cancellationToken))
-        {
-            return Forbid();
-        }
-
-        if (User.IsSupervisor())
-        {
-            if (dto.userId > 0)
-            {
-                var position = User.GetUserPosition();
-                var targetUserInTeam = await _db.users.AnyAsync(
-                    u => u.id == dto.userId &&
-                         u.position == position &&
-                         (dto.role == AppRoles.Sale
-                             ? u.roles == AppRoles.Sale
-                             : (u.roles == AppRoles.TeleSale || u.roles == "Tele sale")),
-                    cancellationToken);
-                if (!targetUserInTeam)
-                {
-                    return Forbid();
-                }
-            }
-        }
-        else if (dto.userId > 0)
-        {
-            var targetUserExists = await _db.users.AnyAsync(
-                u => u.id == dto.userId &&
-                     (u.is_active == null || u.is_active == true) &&
-                     (dto.role == AppRoles.Sale
-                         ? u.roles == AppRoles.Sale
-                         : (u.roles == AppRoles.TeleSale || u.roles == "Tele sale")),
-                cancellationToken);
-            if (!targetUserExists)
-            {
-                return BadRequest(new { message = "Invalid assignment target for the selected role." });
-            }
-        }
-
-        if (dto.role == AppRoles.Sale)
-        {
-            c.sale_id = dto.userId == 0 ? null : dto.userId;
-            c.is_assign_sale = dto.userId != 0;
-        }
-        else
-        {
-            c.telesale_id = dto.userId == 0 ? null : dto.userId;
-            c.is_assign_telesale = dto.userId != 0;
-        }
-
-        if (c.status == "New" && (c.sale_id.HasValue || c.telesale_id.HasValue))
-        {
-            c.status = "Assigned";
-        }
-
-        c.updated_at = DateTime.UtcNow;
-        await _db.SaveChangesAsync(cancellationToken);
-        return Ok(await MapToResponseDto(c, cancellationToken));
+        return BadRequest(new { message = "Assignment is no longer supported." });
     }
 
     [HttpPut("{id}/book")]
     public async Task<IActionResult> BookCustomer(uint id, CancellationToken cancellationToken)
     {
-        var role = User.GetUserRole();
-        if (!User.CanWriteCustomerWorkflow()) return Forbid();
-
-        var c = await _db.customers.FindAsync(new object[] { id }, cancellationToken);
-        if (c == null)
-        {
-            return User.IsAdmin() ? NotFound() : Forbid();
-        }
-
-        if (!await HasCustomerAccess(c, cancellationToken))
-        {
-            return Forbid();
-        }
-
-        c.status = "Booking";
-        c.updated_at = DateTime.UtcNow;
-        await _db.SaveChangesAsync(cancellationToken);
-        return Ok(await MapToResponseDto(c, cancellationToken));
+        return BadRequest(new { message = "Booking is no longer supported." });
     }
 
     // Contact Details Sub-Endpoints
@@ -739,8 +648,8 @@ public class CustomersController : ControllerBase
                 contact_email = d.contact_email ?? "",
                 contact_tel = d.contact_tel ?? "",
                 contact_tel_office = d.contact_tel_office ?? "",
-                point = d.point,
-                total_point = d.total_point
+                point = 0,
+                total_point = 0
             })
             .ToListAsync(cancellationToken);
         return Ok(list);
@@ -786,8 +695,8 @@ public class CustomersController : ControllerBase
             contact_email = d.contact_email,
             contact_tel = d.contact_tel,
             contact_tel_office = d.contact_tel_office,
-            point = d.point,
-            total_point = d.total_point
+            point = 0,
+            total_point = 0
         });
     }
 
@@ -824,8 +733,8 @@ public class CustomersController : ControllerBase
             contact_email = d.contact_email ?? "",
             contact_tel = d.contact_tel ?? "",
             contact_tel_office = d.contact_tel_office ?? "",
-            point = d.point,
-            total_point = d.total_point
+            point = 0,
+            total_point = 0
         });
     }
 
@@ -890,7 +799,7 @@ public class CustomersController : ControllerBase
             desktop_qty = dd.desktop_qty ?? 0,
             server_qty = dd.server_qty ?? 0,
             equipment_expire = dd.equipment_expire?.ToString("yyyy-MM-dd"),
-            point = dd.point,
+            point = 0,
             progress_status = dd.progress_status ?? "New",
             competitor_name = dd.competitor_id.HasValue && competitors.TryGetValue(dd.competitor_id.Value, out var compName) ? compName : ""
         }).ToList();
@@ -935,7 +844,7 @@ public class CustomersController : ControllerBase
             desktop_qty = dto.desktop_qty,
             server_qty = dto.server_qty,
             equipment_expire = string.IsNullOrEmpty(dto.equipment_expire) ? null : DateOnly.Parse(dto.equipment_expire),
-            point = dto.point,
+            point = 0,
             progress_status = dto.progress_status,
             competitor_id = compId,
             created_at = DateTime.UtcNow,
@@ -956,7 +865,7 @@ public class CustomersController : ControllerBase
             desktop_qty = dd.desktop_qty ?? 0,
             server_qty = dd.server_qty ?? 0,
             equipment_expire = dd.equipment_expire?.ToString("yyyy-MM-dd"),
-            point = dd.point,
+            point = 0,
             progress_status = dd.progress_status ?? "New",
             competitor_name = competitorName
         });
@@ -987,7 +896,7 @@ public class CustomersController : ControllerBase
         if (dto.desktop_qty.HasValue) dd.desktop_qty = dto.desktop_qty.Value;
         if (dto.server_qty.HasValue) dd.server_qty = dto.server_qty.Value;
         if (dto.equipment_expire != null) dd.equipment_expire = string.IsNullOrEmpty(dto.equipment_expire) ? null : DateOnly.Parse(dto.equipment_expire);
-        if (dto.point.HasValue) dd.point = dto.point.Value;
+        dd.point = 0;
         if (dto.progress_status != null) dd.progress_status = dto.progress_status;
 
         string competitorName = "";
@@ -1027,7 +936,7 @@ public class CustomersController : ControllerBase
             desktop_qty = dd.desktop_qty ?? 0,
             server_qty = dd.server_qty ?? 0,
             equipment_expire = dd.equipment_expire?.ToString("yyyy-MM-dd"),
-            point = dd.point,
+            point = 0,
             progress_status = dd.progress_status ?? "New",
             competitor_name = competitorName
         });
@@ -1087,7 +996,7 @@ public class CustomersController : ControllerBase
                 dtl_id = dp.dtl_id,
                 dtl = dp.dtl ?? "",
                 close_date = dp.close_date.HasValue ? dp.close_date.Value.ToString("yyyy-MM-dd") : null,
-                point = dp.point,
+                point = 0,
                 progress_status = dp.progress_status
             })
             .ToListAsync(cancellationToken);
@@ -1117,7 +1026,7 @@ public class CustomersController : ControllerBase
             dtl_id = contactId,
             dtl = dto.dtl,
             close_date = string.IsNullOrEmpty(dto.close_date) ? null : DateOnly.Parse(dto.close_date),
-            point = dto.point,
+            point = 0,
             progress_status = dto.progress_status,
             created_at = DateTime.UtcNow,
             updated_at = DateTime.UtcNow
@@ -1133,7 +1042,7 @@ public class CustomersController : ControllerBase
             dtl_id = dp.dtl_id,
             dtl = dp.dtl ?? "",
             close_date = dp.close_date.HasValue ? dp.close_date.Value.ToString("yyyy-MM-dd") : null,
-            point = dp.point,
+            point = 0,
             progress_status = dp.progress_status
         });
     }
@@ -1160,7 +1069,7 @@ public class CustomersController : ControllerBase
 
         if (dto.dtl != null) dp.dtl = dto.dtl;
         if (dto.close_date != null) dp.close_date = string.IsNullOrEmpty(dto.close_date) ? null : DateOnly.Parse(dto.close_date);
-        if (dto.point.HasValue) dp.point = dto.point.Value;
+        dp.point = 0;
         if (dto.progress_status != null) dp.progress_status = dto.progress_status;
 
         dp.updated_at = DateTime.UtcNow;
@@ -1174,7 +1083,7 @@ public class CustomersController : ControllerBase
             dtl_id = dp.dtl_id,
             dtl = dp.dtl ?? "",
             close_date = dp.close_date.HasValue ? dp.close_date.Value.ToString("yyyy-MM-dd") : null,
-            point = dp.point,
+            point = 0,
             progress_status = dp.progress_status
         });
     }
@@ -1263,7 +1172,7 @@ public class CustomersController : ControllerBase
                     contactName = con.contact_name ?? "",
                     details = p.dtl ?? "",
                     closeDate = p.close_date?.ToString("yyyy-MM-dd") ?? "-",
-                    points = p.point,
+                    points = 0,
                     status = p.progress_status ?? "New",
                     type = "Project"
                 });
@@ -1278,7 +1187,7 @@ public class CustomersController : ControllerBase
                     contactName = con.contact_name ?? "",
                     details = $"{d.equipment_dtl} ({d.desktop_qty ?? 0} Desktops, {d.server_qty ?? 0} Servers)",
                     closeDate = d.equipment_expire?.ToString("yyyy-MM-dd") ?? "-",
-                    points = d.point,
+                    points = 0,
                     status = d.progress_status ?? "New",
                     type = "Device License"
                 });
@@ -1286,38 +1195,6 @@ public class CustomersController : ControllerBase
         }
 
         var agentPerformance = new List<object>();
-        var activeAgents = users.Where(u => AppRoles.IsAgentRole(AppRoles.Normalize(u.roles)));
-        foreach (var agent in activeAgents)
-        {
-            var agentRole = AppRoles.Normalize(agent.roles);
-            var assignedCusts = customers.Where(c => agentRole == AppRoles.Sale ? c.sale_id == agent.id : c.telesale_id == agent.id).ToList();
-            
-            int totalPoints = 0;
-            foreach (var c in assignedCusts)
-            {
-                var custContacts = contacts.Where(con => con.cust_id == c.id);
-                foreach (var con in custContacts)
-                {
-                    totalPoints += con.point;
-                }
-            }
-
-            int wins = assignedCusts.Count(c => c.status == "Win");
-            int bookings = assignedCusts.Count(c => c.status == "Booking");
-            int targetPoints = 150;
-            int progress = (int)Math.Min(100, Math.Round(((double)totalPoints / targetPoints) * 100));
-
-            agentPerformance.Add(new
-            {
-                id = agent.id,
-                name = agent.name,
-                role = agent.roles,
-                points = totalPoints,
-                wins = wins,
-                bookings = bookings,
-                progress = progress
-            });
-        }
 
         return Ok(new
         {
@@ -1474,11 +1351,8 @@ public class CustomersController : ControllerBase
         var contact = await _db.details.FindAsync(new object[] { dtlId }, cancellationToken);
         if (contact != null)
         {
-            var devicePoints = await _db.detail_devices.Where(dd => dd.dtl_id == dtlId).SumAsync(dd => dd.point, cancellationToken);
-            var projectPoints = await _db.detail_pjs.Where(dp => dp.dtl_id == dtlId).SumAsync(dp => dp.point, cancellationToken);
-
-            contact.point = devicePoints + projectPoints;
-            contact.total_point = (int)((devicePoints + projectPoints) * 1.5);
+            contact.point = 0;
+            contact.total_point = 0;
             
             await _db.SaveChangesAsync(cancellationToken);
         }

@@ -113,34 +113,9 @@ public static class AuthExtensions
             return query.Where(_ => false);
         }
 
-        if (AppRoles.IsAdminRole(role) || role == AppRoles.Viewer)
+        if (AppRoles.IsAdminRole(role) || role == AppRoles.Viewer || AppRoles.IsSupervisorRole(role) || role == AppRoles.Sale || role == AppRoles.TeleSale)
         {
             return query;
-        }
-
-        var id = (int)userId.Value;
-        if (AppRoles.IsSupervisorRole(role))
-        {
-            var position = user.GetUserPosition();
-            if (string.IsNullOrWhiteSpace(position))
-            {
-                return query.Where(c => c.owner_id == id);
-            }
-
-            return query.Where(c =>
-                c.owner_id == id ||
-                (c.sale_id != null && db.users.Any(u => u.id == c.sale_id && u.position == position && u.position != null && u.position != "")) ||
-                (c.telesale_id != null && db.users.Any(u => u.id == c.telesale_id && u.position == position && u.position != null && u.position != "")));
-        }
-
-        if (role == AppRoles.Sale)
-        {
-            return query.Where(c => c.sale_id == id || c.owner_id == id);
-        }
-
-        if (role == AppRoles.TeleSale)
-        {
-            return query.Where(c => c.telesale_id == id || c.owner_id == id);
         }
 
         return query.Where(_ => false);
@@ -156,29 +131,11 @@ public static class AuthExtensions
         var role = user.GetUserRole();
         if (userId == null || string.IsNullOrEmpty(role)) return false;
 
-        if (AppRoles.IsAdminRole(role) || role == AppRoles.Viewer)
+        if (AppRoles.IsAdminRole(role) || role == AppRoles.Viewer || AppRoles.IsSupervisorRole(role) || role == AppRoles.Sale || role == AppRoles.TeleSale)
         {
             return true;
         }
 
-        var id = (int)userId.Value;
-        if (AppRoles.IsSupervisorRole(role))
-        {
-            if (c.owner_id == id) return true;
-
-            var position = user.GetUserPosition();
-            if (string.IsNullOrWhiteSpace(position)) return false;
-
-            return
-                (c.sale_id != null && await db.users.AnyAsync(u => u.id == c.sale_id && u.position == position, cancellationToken)) ||
-                (c.telesale_id != null && await db.users.AnyAsync(u => u.id == c.telesale_id && u.position == position, cancellationToken));
-        }
-
-        return role switch
-        {
-            AppRoles.Sale => c.sale_id == id || c.owner_id == id,
-            AppRoles.TeleSale => c.telesale_id == id || c.owner_id == id,
-            _ => false
-        };
+        return false;
     }
 }

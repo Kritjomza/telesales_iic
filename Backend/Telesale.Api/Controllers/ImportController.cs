@@ -683,6 +683,7 @@ public class ImportController : ControllerBase
                                         if (bt != null) c.business_type_id = (int)bt.id;
                                     }
 
+                                    /*
                                     var oldSaleId = c.sale_id;
                                     var oldTelesaleId = c.telesale_id;
 
@@ -714,6 +715,7 @@ public class ImportController : ControllerBase
                                         };
                                         _db.assignment_histories.Add(history);
                                     }
+                                    */
 
                                     c.updated_at = DateTime.UtcNow;
                                     c.updated_user = (int?)userId.Value;
@@ -768,6 +770,7 @@ public class ImportController : ControllerBase
                                     owner_id = (int?)userId.Value
                                 };
 
+                                /*
                                 if (request.SaleId.HasValue)
                                 {
                                     c.sale_id = request.SaleId.Value;
@@ -780,10 +783,12 @@ public class ImportController : ControllerBase
                                     c.is_assign_telesale = true;
                                     c.status = "Assigned";
                                 }
+                                */
 
                                 _db.customers.Add(c);
                                 await _db.SaveChangesAsync(cancellationToken);
 
+                                /*
                                 if (c.sale_id.HasValue || c.telesale_id.HasValue)
                                 {
                                     var history = new assignment_history
@@ -799,6 +804,7 @@ public class ImportController : ControllerBase
                                     };
                                     _db.assignment_histories.Add(history);
                                 }
+                                */
 
                                 if (!string.IsNullOrWhiteSpace(validatedRow.ContactName) || !string.IsNullOrWhiteSpace(validatedRow.ContactEmail) || !string.IsNullOrWhiteSpace(validatedRow.ContactTel) || !string.IsNullOrWhiteSpace(validatedRow.ContactPosition))
                                 {
@@ -1285,19 +1291,7 @@ public class ImportController : ControllerBase
 
     private static void ApplyImportAssignments(customer customer, int? saleId, int? telesaleId)
     {
-        if (saleId.HasValue)
-        {
-            customer.sale_id = saleId.Value;
-            customer.is_assign_sale = true;
-            customer.status = "Assigned";
-        }
-
-        if (telesaleId.HasValue)
-        {
-            customer.telesale_id = telesaleId.Value;
-            customer.is_assign_telesale = true;
-            customer.status = "Assigned";
-        }
+        // Assignment is no longer supported
     }
 
     private static bool HasContactData(ValidatedRowResult row)

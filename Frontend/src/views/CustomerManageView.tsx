@@ -6,10 +6,10 @@ import {
 import { apiService } from "../domain/apiService";
 import type { Customer, ContactDetail, DetailDevice, DetailProject, User, Category, Competitor } from "../domain/types";
 import { Drawer } from "../components/Drawer";
-import { AssigneeModal } from "../components/AssigneeModal";
+
 import { ForbiddenView } from "./ForbiddenView";
 import { Pagination } from "../components/Pagination";
-import { canManageAssignments, isAdminRole, isAgentRole, isSupervisorRole } from "../domain/permissions";
+import { isAdminRole, isAgentRole, isSupervisorRole } from "../domain/permissions";
 import { 
   customerMatchesQuickFilter, 
   getCustomerMissingFields, 
@@ -68,9 +68,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
   // Drawer / Modal triggers
   const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
   const [activeCustomer, setActiveCustomer] = useState<Customer | null>(null); // null means "Add New"
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [assignRole, setAssignRole] = useState<"Sale" | "Tele sale">("Sale");
-  const [assignTargetCustomer, setAssignTargetCustomer] = useState<Customer | null>(null);
+
 
   // Import flow states
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -98,7 +96,6 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
   const [totalPages, setTotalPages] = useState(0);
   const [backendMetrics, setBackendMetrics] = useState({
     total: 0,
-    unassigned: 0,
     nearRenewal: 0,
     pendingCostSheets: 0,
     complete: 0,
@@ -134,7 +131,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         if (res.metrics) {
           setBackendMetrics({
             total: res.metrics.total,
-            unassigned: res.metrics.unassigned ?? 0,
+
             nearRenewal: res.metrics.nearRenewal,
             pendingCostSheets: res.metrics.pendingCostSheets ?? 0,
             complete: res.metrics.complete ?? 0,
@@ -176,7 +173,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
       setIsForbidden(false);
       const [res, uList] = await Promise.all([
         apiService.getCustomersPaginated({ page: 1, pageSize }),
-        canManageAssignments(userRole) ? apiService.getUsers() : Promise.resolve([])
+        Promise.resolve([])
       ]);
       setCustomers(res.items);
       setTotalCount(res.totalCount);
@@ -184,7 +181,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
       if (res.metrics) {
         setBackendMetrics({
           total: res.metrics.total,
-          unassigned: res.metrics.unassigned ?? 0,
+
           nearRenewal: res.metrics.nearRenewal,
           pendingCostSheets: res.metrics.pendingCostSheets ?? 0,
           complete: res.metrics.complete ?? 0,
@@ -285,21 +282,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         const matchQuery = !appliedQuery || `${c.name} ${c.address}`.toLowerCase().includes(appliedQuery.toLowerCase());
         const matchBus = appliedBusinessType ? c.bt_type === appliedBusinessType : true;
         
-        let matchSale = true;
-        if (appliedSaleFilter === "assigned") matchSale = c.sale_id !== null;
-        else if (appliedSaleFilter === "unassigned") matchSale = c.sale_id === null;
-        else if (appliedSaleFilter !== "all") {
-          matchSale = c.sale_id?.toString() === appliedSaleFilter;
-        }
-
-        let matchTele = true;
-        if (appliedTelesaleFilter === "assigned") matchTele = c.telesale_id !== null;
-        else if (appliedTelesaleFilter === "unassigned") matchTele = c.telesale_id === null;
-        else if (appliedTelesaleFilter !== "all") {
-          matchTele = c.telesale_id?.toString() === appliedTelesaleFilter;
-        }
-
-        return matchQuery && matchBus && matchSale && matchTele;
+        return matchQuery && matchBus;
       });
     }
 
@@ -347,10 +330,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
   };
 
   // Helper: Get Username by ID
-  const getUserName = (id: number | null, fallback?: string | null) => {
-    if (!id) return "Not assigned";
-    return users.find(u => u.id === id)?.name || fallback || "Assigned";
-  };
+
 
   // Actions: Customer CRUD
   const handleSaveCustomer = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -411,24 +391,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     }
   };
 
-  // Actions: Assignment
-  const openAssignModal = (c: Customer, role: "Sale" | "Tele sale") => {
-    setAssignTargetCustomer(c);
-    setAssignRole(role);
-    setIsAssignModalOpen(true);
-  };
 
-  const handleAssign = async (userId: number) => {
-    if (assignTargetCustomer) {
-      try {
-        await apiService.assignCustomer(assignTargetCustomer.id, userId, assignRole);
-        refreshCustomers();
-        showToast(`Assigned ${assignRole} successfully`, "success");
-      } catch (err) {
-        showToast("Assignment failed", "error");
-      }
-    }
-  };
 
   // Actions: Contact CRUD
   const openContactDrawer = (contact: ContactDetail | null) => {
@@ -726,30 +689,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                     ))}
                   </select>
                 </label>
-                <label>
-                  <span>Sale Status</span>
-                  <select 
-                    value={draftSaleFilter} 
-                    onChange={(e) => setDraftSaleFilter(e.target.value)}
-                    aria-label="Filter by sale assignment"
-                  >
-                    <option value="all">All</option>
-                    <option value="assigned">Assigned</option>
-                    <option value="unassigned">Not assigned</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Telesale Status</span>
-                  <select 
-                    value={draftTelesaleFilter} 
-                    onChange={(e) => setDraftTelesaleFilter(e.target.value)}
-                    aria-label="Filter by telesale assignment"
-                  >
-                    <option value="all">All</option>
-                    <option value="assigned">Assigned</option>
-                    <option value="unassigned">Not assigned</option>
-                  </select>
-                </label>
+
                 <div className="filter-actions">
                   <button className="primary-button" type="submit">
                     <Search size={16} />
@@ -845,19 +785,14 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       <th style={{ width: "12%" }}>Start Date</th>
                       <th style={{ width: "10%" }}>Status</th>
                       <th style={{ width: "15%" }}>Business</th>
-                      {isAdmin && (
-                        <>
-                          <th style={{ width: "11%" }}>Sale</th>
-                          <th style={{ width: "11%" }}>Tele sale</th>
-                        </>
-                      )}
+
                       <th style={{ width: "14%" }}>&nbsp;</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isLoading ? (
                       <tr>
-                        <td colSpan={isAdmin ? 9 : 7} style={{ textAlign: "center", padding: "32px 0" }}>
+                        <td colSpan={6} style={{ textAlign: "center", padding: "32px 0" }}>
                           Loading database customers...
                         </td>
                       </tr>
@@ -891,36 +826,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                               c.bt_type
                             )}
                           </td>
-                          {isAdmin && (
-                            <>
-                              <td>
-                                {c.status !== "Booking" ? (
-                                  <button
-                                    className={`assign-btn ${c.sale_id ? "assigned" : "empty"}`}
-                                    onClick={() => openAssignModal(c, "Sale")}
-                                    type="button"
-                                  >
-                                    {c.sale_id ? getUserName(c.sale_id) : "Assign"}
-                                  </button>
-                                ) : (
-                                  "-"
-                                )}
-                              </td>
-                              <td>
-                                {c.status !== "Booking" ? (
-                                  <button
-                                    className={`assign-btn ${c.telesale_id ? "assigned" : "empty"}`}
-                                    onClick={() => openAssignModal(c, "Tele sale")}
-                                    type="button"
-                                  >
-                                    {c.telesale_id ? getUserName(c.telesale_id) : "Assign"}
-                                  </button>
-                                ) : (
-                                  "-"
-                                )}
-                              </td>
-                            </>
-                          )}
+
                           <td style={{ textAlign: "right" }}>
                             <div className="row-actions">
                               {(() => {
@@ -1070,7 +976,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={isAdmin ? 9 : 7} style={{ textAlign: "center", padding: "32px 0" }}>
+                        <td colSpan={6} style={{ textAlign: "center", padding: "32px 0" }}>
                           No customers found.
                         </td>
                       </tr>
@@ -1134,7 +1040,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       <th style={{ width: "25%" }}>Name</th>
                       <th style={{ width: "25%" }}>Email</th>
                       <th style={{ width: "20%" }}>Tel / Tel Office</th>
-                      <th style={{ width: "10%" }}>Points</th>
+
                       <th style={{ width: "15%" }}>&nbsp;</th>
                     </tr>
                   </thead>
@@ -1146,10 +1052,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                           <td><strong>{item.contact_name}</strong></td>
                           <td>{item.contact_email}</td>
                           <td>{item.contact_tel} {item.contact_tel_office ? ` / ${item.contact_tel_office}` : ""}</td>
-                          <td>
-                            <span className="point-badge">{item.point} pts</span>
-                            <span className="subtext">Total: {item.total_point}</span>
-                          </td>
+
                           <td style={{ textAlign: "right" }}>
                             <div className="row-actions">
                               <button
@@ -1202,7 +1105,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} style={{ textAlign: "center", padding: "24px 0" }}>
+                        <td colSpan={5} style={{ textAlign: "center", padding: "24px 0" }}>
                           No contact persons added yet.
                         </td>
                       </tr>
@@ -1261,7 +1164,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       <th style={{ width: "12%" }}>Desktop Qty</th>
                       <th style={{ width: "12%" }}>Server Qty</th>
                       <th style={{ width: "15%" }}>Expire Date</th>
-                      <th style={{ width: "8%" }}>Points</th>
+
                       <th style={{ width: "10%" }}>Status</th>
                       <th style={{ width: "13%" }}>Competitor</th>
                       <th style={{ width: "10%" }}>&nbsp;</th>
@@ -1279,7 +1182,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                           <td>{item.desktop_qty}</td>
                           <td>{item.server_qty}</td>
                           <td>{item.equipment_expire || "-"}</td>
-                          <td><span className="point-badge">{item.point} pts</span></td>
+
                           <td>
                             <span className={`status-badge ${item.progress_status.toLowerCase()}`}>
                               {item.progress_status}
@@ -1302,7 +1205,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={9} style={{ textAlign: "center", padding: "24px 0" }}>
+                        <td colSpan={8} style={{ textAlign: "center", padding: "24px 0" }}>
                           No device records found.
                         </td>
                       </tr>
@@ -1359,7 +1262,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       <th style={{ width: "5%" }}>No.</th>
                       <th style={{ width: "45%" }}>Project Detail</th>
                       <th style={{ width: "15%" }}>Close Date</th>
-                      <th style={{ width: "10%" }}>Points</th>
+
                       <th style={{ width: "15%" }}>Status</th>
                       <th style={{ width: "10%" }}>&nbsp;</th>
                     </tr>
@@ -1371,7 +1274,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                           <td>{item.id}</td>
                           <td><strong>{item.dtl}</strong></td>
                           <td>{item.close_date || "-"}</td>
-                          <td><span className="point-badge">{item.point} pts</span></td>
+
                           <td>
                             <span className={`status-badge ${item.progress_status.toLowerCase()}`}>
                               {item.progress_status}
@@ -1391,7 +1294,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} style={{ textAlign: "center", padding: "24px 0" }}>
+                        <td colSpan={5} style={{ textAlign: "center", padding: "24px 0" }}>
                           No project records found.
                         </td>
                       </tr>
@@ -1508,17 +1411,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         </form>
       </Drawer>
 
-      {/* 2. Assignee Picker Modal */}
-      {isAssignModalOpen && assignTargetCustomer && (
-        <AssigneeModal
-          isOpen={isAssignModalOpen}
-          role={assignRole}
-          customerName={assignTargetCustomer.name}
-          onClose={() => setIsAssignModalOpen(false)}
-          onAssign={handleAssign}
-          users={users}
-        />
-      )}
+
 
       {/* 3. Excel Import Mock Modal */}
       {isImportModalOpen && (
@@ -1693,16 +1586,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   defaultValue={activeDevice?.equipment_expire || ""} 
                 />
               </div>
-              <div className="form-group">
-                <label htmlFor="point_dev">Point *</label>
-                <input 
-                  id="point_dev"
-                  name="point" 
-                  type="number" 
-                  defaultValue={activeDevice ? activeDevice.point : 10} 
-                  required 
-                />
-              </div>
+              <input type="hidden" name="point" value="0" />
             </div>
             <div className="form-row">
               <div className="form-group">
@@ -1769,16 +1653,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   defaultValue={activeProject?.close_date || ""} 
                 />
               </div>
-              <div className="form-group">
-                <label htmlFor="point_proj">Point *</label>
-                <input 
-                  id="point_proj"
-                  name="point" 
-                  type="number" 
-                  defaultValue={activeProject ? activeProject.point : 10} 
-                  required 
-                />
-              </div>
+              <input type="hidden" name="point" value="0" />
             </div>
             <div className="form-group">
               <label htmlFor="progress_status_proj">Status</label>

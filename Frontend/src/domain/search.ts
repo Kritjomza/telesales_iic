@@ -158,7 +158,7 @@ export function rankSearchFieldsMultiToken(
     }
   }
 
-  if (tokenMatches.length === 0) return null;
+  if (tokenMatches.length < tokens.length) return null;
 
   const totalTokens = tokens.length;
   const matchedCount = tokenMatches.length;

@@ -87,10 +87,6 @@ export function isAgentRole(role: string | null | undefined): boolean {
   return normalized === "Sale" || normalized === "Tele Sale";
 }
 
-export function canManageAssignments(role: string | null | undefined): boolean {
-  return isAdminRole(role) || isSupervisorRole(role);
-}
-
 export function canAccessGroup(groupLabel: string, role: string | null | undefined): boolean {
   const permission = groupPermissions[groupLabel];
   return permission ? hasPermission(role, permission) : false;

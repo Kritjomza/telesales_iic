@@ -53,16 +53,17 @@ describe("rankSearchFieldsMultiToken", () => {
     expect(result!.tokenMatches).toHaveLength(2);
   });
 
-  it("ranks multi-token matches higher than single-token matches", () => {
+  it("rejects partial matches where not all tokens match", () => {
     const fieldsOnlyName = [
       { value: "องค์การคลังสินค้า", label: "Customer name", fuzzy: true },
       { value: "กรุงเทพมหานคร", label: "Address" },
     ];
 
-    const multiResult = rankSearchFieldsMultiToken("สินค้า นนทบุรี", fields)!;
-    const oneTokenResult = rankSearchFieldsMultiToken("สินค้า นนทบุรี", fieldsOnlyName)!;
+    const multiResult = rankSearchFieldsMultiToken("สินค้า นนทบุรี", fields);
+    const oneTokenResult = rankSearchFieldsMultiToken("สินค้า นนทบุรี", fieldsOnlyName);
 
-    expect(multiResult.rank).toBeLessThan(oneTokenResult.rank);
+    expect(multiResult).not.toBeNull();
+    expect(oneTokenResult).toBeNull();
   });
 
   it("produces same ranking regardless of token order if all tokens are matched", () => {
@@ -73,7 +74,7 @@ describe("rankSearchFieldsMultiToken", () => {
     expect(result1.matchedFields.sort()).toEqual(result2.matchedFields.sort());
   });
 
-  it("keeps partial-match ranking independent of token order", () => {
+  it("rejects partial matches regardless of token order", () => {
     const fieldsOnlyName = [
       { value: "องค์การคลังสินค้า", label: "Customer name" },
     ];
@@ -81,18 +82,29 @@ describe("rankSearchFieldsMultiToken", () => {
       { value: "นนทบุรี", label: "Address" },
     ];
 
-    // For query "สินค้า นนทบุรี", token 1 is "สินค้า"
-    // So fieldsOnlyName (matches "สินค้า") should rank better (lower rank) than fieldsOnlyAddress (matches "นนทบุรี")
-    const rankNameForQuery1 = rankSearchFieldsMultiToken("สินค้า นนทบุรี", fieldsOnlyName)!.rank;
-    const rankAddressForQuery1 = rankSearchFieldsMultiToken("สินค้า นนทบุรี", fieldsOnlyAddress)!.rank;
-    expect(rankNameForQuery1).toBeGreaterThanOrEqual(1000);
+    expect(rankSearchFieldsMultiToken("สินค้า นนทบุรี", fieldsOnlyName)).toBeNull();
+    expect(rankSearchFieldsMultiToken("สินค้า นนทบุรี", fieldsOnlyAddress)).toBeNull();
+    expect(rankSearchFieldsMultiToken("นนทบุรี สินค้า", fieldsOnlyName)).toBeNull();
+    expect(rankSearchFieldsMultiToken("นนทบุรี สินค้า", fieldsOnlyAddress)).toBeNull();
+  });
 
-    // For query "นนทบุรี สินค้า", token 1 is "นนทบุรี"
-    // So fieldsOnlyAddress (matches "นนทบุรี") should rank better (lower rank) than fieldsOnlyName (matches "สินค้า")
-    const rankNameForQuery2 = rankSearchFieldsMultiToken("นนทบุรี สินค้า", fieldsOnlyName)!.rank;
-    const rankAddressForQuery2 = rankSearchFieldsMultiToken("นนทบุรี สินค้า", fieldsOnlyAddress)!.rank;
-    expect(rankNameForQuery1).toBe(rankNameForQuery2);
-    expect(rankAddressForQuery1).toBe(rankAddressForQuery2);
+  it("handles the explicit user examples for strict token matching", () => {
+    const exampleFields = [
+      { value: "บริษัท มหาชน จำกัด", label: "Customer name" },
+      { value: "อำเภอเมืองนนทบุรี นนทบุรี", label: "Address" },
+    ];
+
+    // Query: มหาชน -> Should match
+    const result1 = rankSearchFieldsMultiToken("มหาชน", exampleFields);
+    expect(result1).not.toBeNull();
+
+    // Query: มหาชน นนทบุรี -> Should match (both tokens match)
+    const result2 = rankSearchFieldsMultiToken("มหาชน นนทบุรี", exampleFields);
+    expect(result2).not.toBeNull();
+
+    // Query: มหาชน นนทบุรี ท่าอิฐ -> Should NOT match (ท่าอิฐ not found)
+    const result3 = rankSearchFieldsMultiToken("มหาชน นนทบุรี ท่าอิฐ", exampleFields);
+    expect(result3).toBeNull();
   });
 
   it("still works for single-token queries", () => {

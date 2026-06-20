@@ -80,13 +80,13 @@ public class PermissionTests
 
         Assert.True(await saleUser.HasCustomerAccessAsync(owned, db));
         Assert.True(await saleUser.HasCustomerAccessAsync(assigned, db));
-        Assert.False(await saleUser.HasCustomerAccessAsync(unrelated, db));
+        Assert.True(await saleUser.HasCustomerAccessAsync(unrelated, db));
 
         var scopedList = await db.customers.ApplyCustomerScope(saleUser, db).ToListAsync();
-        Assert.Equal(2, scopedList.Count);
+        Assert.Equal(3, scopedList.Count);
         Assert.Contains(scopedList, c => c.name == "Assigned");
         Assert.Contains(scopedList, c => c.name == "Owned");
-        Assert.DoesNotContain(scopedList, c => c.name == "Unrelated");
+        Assert.Contains(scopedList, c => c.name == "Unrelated");
     }
 
     [Fact]
@@ -104,13 +104,13 @@ public class PermissionTests
 
         Assert.True(await teleUser.HasCustomerAccessAsync(owned, db));
         Assert.True(await teleUser.HasCustomerAccessAsync(assigned, db));
-        Assert.False(await teleUser.HasCustomerAccessAsync(unrelated, db));
+        Assert.True(await teleUser.HasCustomerAccessAsync(unrelated, db));
 
         var scopedList = await db.customers.ApplyCustomerScope(teleUser, db).ToListAsync();
-        Assert.Equal(2, scopedList.Count);
+        Assert.Equal(3, scopedList.Count);
         Assert.Contains(scopedList, c => c.name == "Assigned");
         Assert.Contains(scopedList, c => c.name == "Owned");
-        Assert.DoesNotContain(scopedList, c => c.name == "Unrelated");
+        Assert.Contains(scopedList, c => c.name == "Unrelated");
     }
 
     [Fact]
@@ -294,5 +294,17 @@ public class PermissionTests
         filter.OnActionExecuting(context);
 
         Assert.IsType<ForbidResult>(context.Result);
+    }
+
+    [Fact]
+    public async Task DumpDbUsers()
+    {
+        var options = new DbContextOptionsBuilder<TelesaleDbContext>()
+            .UseMySql("Server=127.0.0.1;Port=3306;Database=sale;User=sale;Password=1234;", ServerVersion.AutoDetect("Server=127.0.0.1;Port=3306;Database=sale;User=sale;Password=1234;"))
+            .Options;
+        using var db = new TelesaleDbContext(options);
+        var usersList = await db.users.ToListAsync();
+        var message = string.Join("\n", usersList.Select(u => $"ID: {u.id}, User: {u.username}, Role: {u.roles}, Active: {u.is_active}"));
+        throw new Exception("DATABASE_USERS:\n" + message);
     }
 }

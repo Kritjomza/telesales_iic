@@ -4,14 +4,13 @@ import type { Customer, User } from "../domain/types";
 import { FileText, Calendar, TrendingUp, Key, ClipboardList } from "lucide-react";
 import { ForbiddenView } from "./ForbiddenView";
 
-type ReportTab = "operation" | "assign" | "performance" | "renewal" | "project-detail";
+type ReportTab = "operation" | "renewal" | "project-detail";
 
 export const ReportsView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ReportTab>("operation");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [projectDetailSummary, setProjectDetailSummary] = useState<any[]>([]);
-  const [agentPerformance, setAgentPerformance] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isForbidden, setIsForbidden] = useState(false);
 
@@ -30,7 +29,6 @@ export const ReportsView: React.FC = () => {
       setCustomers(custs);
       setUsers(uList);
       setProjectDetailSummary(reportData.projectLedger);
-      setAgentPerformance(reportData.agentPerformance);
     } catch (err: any) {
       if (err.message?.includes("403") || err.message?.includes("Forbidden")) {
         setIsForbidden(true);
@@ -59,21 +57,7 @@ export const ReportsView: React.FC = () => {
     }));
   }, [customers]);
 
-  // 2. Assign History data
-  const assignHistory = useMemo(() => {
-    return customers.filter(c => c.sale_id || c.telesale_id).map(c => {
-      const sale = users.find(u => u.id === c.sale_id)?.name || "-";
-      const tele = users.find(u => u.id === c.telesale_id)?.name || "-";
-      return {
-        id: c.id,
-        name: c.name,
-        sale,
-        tele,
-        assignedAt: c.updatedAt,
-        status: c.status
-      };
-    });
-  }, [customers, users]);
+
 
   // 4. Renewal summary list
   const renewalSummary = useMemo(() => {
@@ -113,22 +97,7 @@ export const ReportsView: React.FC = () => {
           <ClipboardList size={15} />
           Operation Report
         </button>
-        <button 
-          className={`report-tab-btn ${activeTab === "assign" ? "active" : ""}`}
-          onClick={() => setActiveTab("assign")}
-          type="button"
-        >
-          <Key size={15} />
-          Assign History
-        </button>
-        <button 
-          className={`report-tab-btn ${activeTab === "performance" ? "active" : ""}`}
-          onClick={() => setActiveTab("performance")}
-          type="button"
-        >
-          <TrendingUp size={15} />
-          Performance
-        </button>
+
         <button 
           className={`report-tab-btn ${activeTab === "renewal" ? "active" : ""}`}
           onClick={() => setActiveTab("renewal")}
@@ -192,99 +161,7 @@ export const ReportsView: React.FC = () => {
               </div>
             )}
 
-            {/* REPORT 2: ASSIGN HISTORY */}
-            {activeTab === "assign" && (
-              <div className="panel animate-fade-in">
-                <div className="panel-header">
-                  <h2>Customer Assignment History</h2>
-                  <p>Historical audit log of client accounts assigned to Sales managers and Telesales teams.</p>
-                </div>
-                <div className="table-wrap">
-                  <table className="corporate-table" aria-label="Customer assignment history table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: "5%" }}>No.</th>
-                        <th style={{ width: "30%" }}>Customer</th>
-                        <th style={{ width: "20%" }}>Assigned Sale</th>
-                        <th style={{ width: "20%" }}>Assigned Telesale</th>
-                        <th style={{ width: "15%" }}>Assignment Date</th>
-                        <th style={{ width: "10%" }}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {assignHistory.length > 0 ? (
-                        assignHistory.map((item, index) => (
-                          <tr key={item.id}>
-                            <td>{index + 1}</td>
-                            <td><strong>{item.name}</strong></td>
-                            <td>{item.sale}</td>
-                            <td>{item.tele}</td>
-                            <td>{item.assignedAt}</td>
-                            <td><span className={`status-badge ${item.status.toLowerCase()}`}>{item.status}</span></td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={6} style={{ textAlign: "center", padding: "24px 0" }}>
-                            No assignments recorded yet.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
 
-            {/* REPORT 3: PERFORMANCE REPORT */}
-            {activeTab === "performance" && (
-              <div className="panel animate-fade-in">
-                <div className="panel-header">
-                  <h2>Agent Sales Performance leaderboard</h2>
-                  <p>Live rankings of Sales and Telesales representatives sorted by their accumulated client points.</p>
-                </div>
-                <div className="table-wrap">
-                  <table className="corporate-table" aria-label="Sales performance table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: "5%" }}>Rank</th>
-                        <th style={{ width: "25%" }}>Agent Name</th>
-                        <th style={{ width: "15%" }}>Role</th>
-                        <th style={{ width: "12%" }}>Bookings</th>
-                        <th style={{ width: "12%" }}>Win Status</th>
-                        <th style={{ width: "16%" }}>Points Total</th>
-                        <th style={{ width: "15%" }}>Target Progress (150 pts)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {agentPerformance.map((item, index) => (
-                        <tr key={item.id}>
-                          <td>{index + 1}</td>
-                          <td><strong>{item.name}</strong></td>
-                          <td>
-                            <span className={`status-badge info`}>{item.role}</span>
-                          </td>
-                          <td>{item.bookings}</td>
-                          <td>{item.wins} wins</td>
-                          <td><strong>{item.points} points</strong></td>
-                          <td>
-                            <div className="perf-bar-container">
-                              <div 
-                                className={`perf-bar ${item.progress >= 100 ? "high" : item.progress > 50 ? "mid" : "low"}`}
-                                style={{ 
-                                  width: `${item.progress}%`
-                                }} 
-                              />
-                            </div>
-                            <span className="subtext">{item.progress}% completed</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
 
             {/* REPORT 4: SUMMARY RENEWAL */}
             {activeTab === "renewal" && (
@@ -362,9 +239,8 @@ export const ReportsView: React.FC = () => {
                         <th style={{ width: "5%" }}>No.</th>
                         <th style={{ width: "25%" }}>Customer Name</th>
                         <th style={{ width: "15%" }}>Contact Person</th>
-                        <th style={{ width: "30%" }}>Project / License Description</th>
-                        <th style={{ width: "10%" }}>Exp Date</th>
-                        <th style={{ width: "10%" }}>Points</th>
+                        <th style={{ width: "35%" }}>Project / License Description</th>
+                        <th style={{ width: "15%" }}>Exp Date</th>
                         <th style={{ width: "5%" }}>Status</th>
                       </tr>
                     </thead>
@@ -382,13 +258,12 @@ export const ReportsView: React.FC = () => {
                               <strong style={{ display: "block" }}>{item.details}</strong>
                             </td>
                             <td>{item.closeDate}</td>
-                            <td><span className="point-badge">{item.points} pts</span></td>
                             <td><span className={`status-badge ${item.status.toLowerCase()}`}>{item.status}</span></td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={7} style={{ textAlign: "center", padding: "24px 0" }}>
+                          <td colSpan={6} style={{ textAlign: "center", padding: "24px 0" }}>
                             No project detail ledger items found.
                           </td>
                         </tr>

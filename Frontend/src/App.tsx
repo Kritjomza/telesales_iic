@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { Toast, type ToastItem } from "./components/Toast";
 import { CustomerManageView } from "./views/CustomerManageView";
-import { BookingView } from "./views/BookingView";
 import { CostSheetView } from "./views/CostSheetView";
 import { ReportsView } from "./views/ReportsView";
 import { MasterDataView, type MasterTableType } from "./views/MasterDataView";
@@ -41,8 +40,7 @@ const navigationGroups = [
     label: "Customer",
     icon: Users,
     items: [
-      { name: "Manage", key: "manage" },
-      { name: "Booking", key: "booking" }
+      { name: "Manage", key: "manage" }
     ]
   },
   {
@@ -57,7 +55,6 @@ const navigationGroups = [
     icon: BookOpen,
     items: [
       { name: "Operation", key: "reports" },
-      { name: "Assign History", key: "reports" },
       { name: "Summary Renewal", key: "reports" },
       { name: "Summary Project Detail", key: "reports" }
     ]
@@ -289,9 +286,7 @@ function App() {
             {currentView === "manage" && (
               <CustomerManageView userRole={currentUser.roles} showToast={showToast} />
             )}
-            {currentView === "booking" && (
-              <BookingView userRole={currentUser.roles} showToast={showToast} />
-            )}
+
             {currentView === "cost-sheet" && (
               <CostSheetView userRole={currentUser.roles} showToast={showToast} />
             )}

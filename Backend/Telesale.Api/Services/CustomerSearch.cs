@@ -253,7 +253,7 @@ public static class CustomerSearch
             }
         }
 
-        if (tokenMatches.Count == 0) return null;
+        if (tokenMatches.Count < multiTerm.Tokens.Count) return null;
 
         int totalTokens = multiTerm.Tokens.Count;
         int matchedCount = tokenMatches.Count;
@@ -290,7 +290,7 @@ public static class CustomerSearch
             }
         }
 
-        if (tokenMatches.Count == 0) return null;
+        if (tokenMatches.Count < multiTerm.Tokens.Count) return null;
 
         var compositeRank = (multiTerm.Tokens.Count - tokenMatches.Count) * 1000 + tokenMatches.Sum(m => m.Rank);
         var matchedField = string.Join(", ", tokenMatches.Select(m => m.Field).Distinct());

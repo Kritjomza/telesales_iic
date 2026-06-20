@@ -48,7 +48,6 @@ describe("customer workspace data helpers", () => {
   it("builds operational metrics from the customer list", () => {
     expect(buildCustomerMetrics(customers)).toEqual({
       totalCustomers: 3,
-      unassigned: 1,
       nearRenewal: 2,
       pendingCostSheets: 2
     });
@@ -57,9 +56,7 @@ describe("customer workspace data helpers", () => {
   it("filters by text, business, and assignment state", () => {
     const result = filterCustomers(customers, {
       query: "bangkok",
-      businessType: "Commercial",
-      saleStatus: "assigned",
-      telesaleStatus: "assigned"
+      businessType: "Commercial"
     });
 
     expect(result.map((customer) => customer.name)).toEqual([

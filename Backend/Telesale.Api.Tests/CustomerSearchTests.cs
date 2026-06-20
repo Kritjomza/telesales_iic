@@ -95,7 +95,7 @@ public class CustomerSearchTests
     }
 
     [Fact]
-    public void TestRankMultiTokenRanksBetterWhenMoreTokensMatched()
+    public void TestRankMultiTokenStrictMatching()
     {
         var customerBoth = new customer
         {
@@ -122,11 +122,7 @@ public class CustomerSearchTests
         var matchOne = CustomerSearch.RankMultiToken(customerOne, term);
 
         Assert.NotNull(matchBoth);
-        Assert.NotNull(matchOne);
-
-        // customerBoth matches 2 tokens, customerOne matches 1 token.
-        // Less is better, so matchBoth.Rank should be lower than matchOne.Rank.
-        Assert.True(matchBoth.Rank < matchOne.Rank);
+        Assert.Null(matchOne);
     }
 
     [Fact]
@@ -169,11 +165,8 @@ public class CustomerSearchTests
         var match1 = CustomerSearch.RankMultiToken(cust1, term);
         var match2 = CustomerSearch.RankMultiToken(cust2, term);
 
-        Assert.NotNull(match1);
-        Assert.NotNull(match2);
-
-        Assert.True(match1.Rank >= 1000);
-        Assert.True(match2.Rank >= 1000);
+        Assert.Null(match1);
+        Assert.Null(match2);
     }
 
     [Fact]
@@ -292,8 +285,7 @@ public class CustomerSearchTests
         var partialMatch = CustomerSearch.RankDocument(partial, term);
 
         Assert.NotNull(allMatch);
-        Assert.NotNull(partialMatch);
-        Assert.True(allMatch.Rank < partialMatch.Rank);
+        Assert.Null(partialMatch);
     }
 
     private TelesaleDbContext GetInMemoryDbContext()
@@ -396,10 +388,10 @@ public class CustomerSearchTests
         await db.SaveChangesAsync();
 
         var controller = CreateCustomersController(db, CreateUserPrincipal(1, AppRoles.SuperAdmin));
-        var result = await controller.GetCustomers(null, null, product + " " + nonthaburi, default);
+        var result = await controller.GetCustomers(null, null, product + " " + nonthaburi, null, null, default);
 
         var list = GetCustomerList(result);
-        Assert.Equal(3, list.Count);
+        Assert.Single(list);
         Assert.Equal((uint)1, list[0].id);
         Assert.Contains("Customer name", list[0].matchedField);
         Assert.Contains("Address", list[0].matchedField);
@@ -415,11 +407,12 @@ public class CustomerSearchTests
         await db.SaveChangesAsync();
 
         var controller = CreateCustomersController(db, CreateUserPrincipal(20, AppRoles.TeleSale));
-        var result = await controller.GetCustomers(null, null, "Alpha", default);
+        var result = await controller.GetCustomers(null, null, "Alpha", null, null, default);
 
         var list = GetCustomerList(result);
-        var only = Assert.Single(list);
-        Assert.Equal((uint)1, only.id);
+        Assert.Equal(2, list.Count);
+        Assert.Contains(list, c => c.id == 1);
+        Assert.Contains(list, c => c.id == 2);
     }
 
     [Fact]
@@ -434,10 +427,41 @@ public class CustomerSearchTests
         var adminController = CreateCustomersController(db, CreateUserPrincipal(10, AppRoles.Admin));
         var superAdminController = CreateCustomersController(db, CreateUserPrincipal(11, AppRoles.SuperAdmin));
 
-        var adminList = GetCustomerList(await adminController.GetCustomers(null, null, "Alpha", default));
-        var superAdminList = GetCustomerList(await superAdminController.GetCustomers(null, null, "Alpha", default));
+        var adminList = GetCustomerList(await adminController.GetCustomers(null, null, "Alpha", null, null, default));
+        var superAdminList = GetCustomerList(await superAdminController.GetCustomers(null, null, "Alpha", null, null, default));
 
         Assert.Equal(2, adminList.Count);
         Assert.Equal(2, superAdminList.Count);
+    }
+
+    [Fact]
+    public void TestRankMultiTokenStrictTokenMatchingExamples()
+    {
+        var customer = new customer
+        {
+            id = 1,
+            name = "มหาชน นนทบุรี",
+            address = "ถนนรัตนาธิเบศร์",
+            status = "New",
+            create_type = "Manual"
+        };
+
+        // Query: มหาชน -> Should match
+        var term1 = CustomerSearch.NormalizeMultiToken("มหาชน");
+        Assert.NotNull(term1);
+        var match1 = CustomerSearch.RankMultiToken(customer, term1);
+        Assert.NotNull(match1);
+
+        // Query: มหาชน นนทบุรี -> Should match (both tokens match)
+        var term2 = CustomerSearch.NormalizeMultiToken("มหาชน นนทบุรี");
+        Assert.NotNull(term2);
+        var match2 = CustomerSearch.RankMultiToken(customer, term2);
+        Assert.NotNull(match2);
+
+        // Query: มหาชน นนทบุรี ท่าอิฐ -> Should NOT match (ท่าอิฐ not found)
+        var term3 = CustomerSearch.NormalizeMultiToken("มหาชน นนทบุรี ท่าอิฐ");
+        Assert.NotNull(term3);
+        var match3 = CustomerSearch.RankMultiToken(customer, term3);
+        Assert.Null(match3);
     }
 }
