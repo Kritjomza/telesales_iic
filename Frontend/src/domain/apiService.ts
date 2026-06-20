@@ -36,7 +36,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function request<T>(path: string, options?: RequestInit & { skipForbiddenRedirect?: boolean }): Promise<T> {
   const url = `${API_BASE}${path}`;
   const response = await fetch(url, {
     ...options,
@@ -76,7 +76,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
         onUnauthorizedCallback();
       }
     } else if (response.status === 403) {
-      if (onForbiddenCallback) {
+      if (onForbiddenCallback && !options?.skipForbiddenRedirect) {
         onForbiddenCallback();
       }
     }
@@ -194,8 +194,9 @@ export const apiService = {
 
   async deleteCustomer(id: number): Promise<boolean> {
     return request<boolean>(`/customers/${id}`, {
-      method: "DELETE"
-    });
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
 
@@ -223,8 +224,9 @@ export const apiService = {
 
   async deleteContactDetail(id: number): Promise<boolean> {
     return request<boolean>(`/customers/contacts/${id}`, {
-      method: "DELETE"
-    });
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
   // Devices
@@ -248,8 +250,9 @@ export const apiService = {
 
   async deleteDevice(id: number): Promise<boolean> {
     return request<boolean>(`/customers/devices/${id}`, {
-      method: "DELETE"
-    });
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
   // Projects
@@ -273,8 +276,9 @@ export const apiService = {
 
   async deleteProject(id: number): Promise<boolean> {
     return request<boolean>(`/customers/projects/${id}`, {
-      method: "DELETE"
-    });
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
   // Cost Sheets
@@ -312,8 +316,9 @@ export const apiService = {
 
   async deleteCostSheet(id: number): Promise<boolean> {
     return request<boolean>(`/costsheets/${id}`, {
-      method: "DELETE"
-    });
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
   // Master Data - Brands
@@ -334,8 +339,9 @@ export const apiService = {
   },
   async deleteBrand(id: number): Promise<boolean> {
     return request<boolean>(`/masterdata/brands/${id}`, {
-      method: "DELETE"
-    });
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
   // Master Data - Products
@@ -356,8 +362,9 @@ export const apiService = {
   },
   async deleteProduct(id: number): Promise<boolean> {
     return request<boolean>(`/masterdata/products/${id}`, {
-      method: "DELETE"
-    });
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
   // Master Data - Antivirus Prices
@@ -378,8 +385,9 @@ export const apiService = {
   },
   async deleteAntivirusPrice(id: number): Promise<boolean> {
     return request<boolean>(`/masterdata/antivirus-prices/${id}`, {
-      method: "DELETE"
-    });
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
   // Master Data - Business Types
@@ -402,8 +410,9 @@ export const apiService = {
   },
   async deleteBusinessType(id: number): Promise<boolean> {
     return request<boolean>(`/masterdata/business-types/${id}`, {
-      method: "DELETE"
-    });
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
   // Master Data - Categories
@@ -424,8 +433,9 @@ export const apiService = {
   },
   async deleteCategory(id: number): Promise<boolean> {
     return request<boolean>(`/masterdata/categories/${id}`, {
-      method: "DELETE"
-    });
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
   // Master Data - Competitors
@@ -446,8 +456,9 @@ export const apiService = {
   },
   async deleteCompetitor(id: number): Promise<boolean> {
     return request<boolean>(`/masterdata/competitors/${id}`, {
-      method: "DELETE"
-    });
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
   // Master Data - Profiles
@@ -468,8 +479,9 @@ export const apiService = {
   },
   async deleteProfile(id: number): Promise<boolean> {
     return request<boolean>(`/masterdata/profiles/${id}`, {
-      method: "DELETE"
-    });
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
   // Reports

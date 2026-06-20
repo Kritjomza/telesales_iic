@@ -605,6 +605,18 @@ public class CustomersController : ControllerBase
             return NotFound();
         }
 
+        // Manual cascade delete of child entities
+        var details = await _db.details.Where(x => x.cust_id == id).ToListAsync(cancellationToken);
+        foreach (var dtl in details)
+        {
+            var devices = await _db.detail_devices.Where(x => x.dtl_id == dtl.id).ToListAsync(cancellationToken);
+            _db.detail_devices.RemoveRange(devices);
+
+            var projects = await _db.detail_pjs.Where(x => x.dtl_id == dtl.id).ToListAsync(cancellationToken);
+            _db.detail_pjs.RemoveRange(projects);
+        }
+        _db.details.RemoveRange(details);
+
         _db.customers.Remove(c);
         await _db.SaveChangesAsync(cancellationToken);
         return Ok(true);

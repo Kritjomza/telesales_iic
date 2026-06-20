@@ -9,7 +9,7 @@ import { Drawer } from "../components/Drawer";
 
 import { ForbiddenView } from "./ForbiddenView";
 import { Pagination } from "../components/Pagination";
-import { isAdminRole, isAgentRole, isSupervisorRole } from "../domain/permissions";
+import { isAdminRole, isAgentRole, isSupervisorRole, canDeleteCustomer } from "../domain/permissions";
 import { 
   customerMatchesQuickFilter, 
   getCustomerMissingFields, 
@@ -960,7 +960,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                               >
                                 <Pencil size={14} />
                               </button>
-                              {(isAdmin || isSupervisor) && (
+                              {canDeleteCustomer(userRole) && (
                                 <button 
                                   className="delete-btn"
                                   onClick={() => handleDeleteCustomer(c.id, c.name)}
@@ -1096,9 +1096,11 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                               <button onClick={() => openContactDrawer(item)} aria-label="Edit contact" type="button">
                                 <Pencil size={13} />
                               </button>
-                              <button className="delete-btn" onClick={() => handleDeleteContact(item.id, subView.customer.id)} aria-label="Delete contact" type="button">
-                                <Trash2 size={13} />
-                              </button>
+                              {userRole !== "Viewer" && (
+                                <button className="delete-btn" onClick={() => handleDeleteContact(item.id, subView.customer.id)} aria-label="Delete contact" type="button">
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1195,9 +1197,11 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                                 <button onClick={() => openDeviceDrawer(item)} aria-label="Edit device" type="button">
                                   <Pencil size={13} />
                                 </button>
-                                <button className="delete-btn" onClick={() => handleDeleteDevice(item.id, subView.contact.id)} aria-label="Delete device" type="button">
-                                  <Trash2 size={13} />
-                                </button>
+                                {userRole !== "Viewer" && (
+                                  <button className="delete-btn" onClick={() => handleDeleteDevice(item.id, subView.contact.id)} aria-label="Delete device" type="button">
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
                               </div>
                             )}
                           </td>
@@ -1285,9 +1289,11 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                               <button onClick={() => openProjectDrawer(item)} aria-label="Edit project" type="button">
                                 <Pencil size={13} />
                               </button>
-                              <button className="delete-btn" onClick={() => handleDeleteProject(item.id, subView.contact.id)} aria-label="Delete project" type="button">
-                                <Trash2 size={13} />
-                              </button>
+                               {userRole !== "Viewer" && (
+                                <button className="delete-btn" onClick={() => handleDeleteProject(item.id, subView.contact.id)} aria-label="Delete project" type="button">
+                                  <Trash2 size={13} />
+                                </button>
+                               )}
                             </div>
                           </td>
                         </tr>

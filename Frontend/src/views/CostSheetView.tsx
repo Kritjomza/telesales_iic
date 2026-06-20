@@ -3,7 +3,7 @@ import { Plus, Check, X, ArrowLeft, Download, Send } from "lucide-react";
 import { apiService } from "../domain/apiService";
 import type { CostSheet, Customer, Brand, Product } from "../domain/types";
 import { ForbiddenView } from "./ForbiddenView";
-import { isAdminRole } from "../domain/permissions";
+import { isAdminRole, isSupervisorRole } from "../domain/permissions";
 import { Pagination } from "../components/Pagination";
 
 interface CostSheetViewProps {
@@ -15,6 +15,7 @@ type Mode = "list" | "create" | "preview";
 
 export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToast }) => {
   const isAdmin = isAdminRole(userRole);
+  const isSupervisor = isSupervisorRole(userRole);
   const [mode, setMode] = useState<Mode>("list");
   const [costSheets, setCostSheets] = useState<CostSheet[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -289,9 +290,11 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
                                 >
                                   View
                                 </button>
-                                <button className="delete-btn" onClick={() => handleDelete(item.id)} aria-label="Delete cost sheet" type="button">
-                                  <X size={14} />
-                                </button>
+                                {(isAdmin || isSupervisor) && (
+                                  <button className="delete-btn" onClick={() => handleDelete(item.id)} aria-label="Delete cost sheet" type="button">
+                                    <X size={14} />
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>

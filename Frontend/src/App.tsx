@@ -294,7 +294,7 @@ function App() {
               <ReportsView />
             )}
             {currentView === "master-data" && (
-              <MasterDataView tableType={activeMasterTable} showToast={showToast} />
+              <MasterDataView tableType={activeMasterTable} userRole={currentUser.roles} showToast={showToast} />
             )}
             {currentView === "import-customers" && (
               <ImportCustomersView showToast={showToast} />

@@ -4,6 +4,7 @@ import { apiService } from "../domain/apiService";
 import type { Brand, Product, AntivirusPrice, Category, Competitor, Profile, User } from "../domain/types";
 import { Drawer } from "../components/Drawer";
 import { ForbiddenView } from "./ForbiddenView";
+import { canWriteMasterData, canDeleteMasterData } from "../domain/permissions";
 
 export type MasterTableType = 
   | "profiles" 
@@ -17,10 +18,11 @@ export type MasterTableType =
 
 interface MasterDataViewProps {
   tableType: MasterTableType;
+  userRole: string;
   showToast: (msg: string, type: "success" | "error" | "info") => void;
 }
 
-export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, showToast }) => {
+export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userRole, showToast }) => {
   // Local states for tables
   const [data, setData] = useState<any[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -244,7 +246,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, showT
           <p>Master Data / {getTableTitle()}</p>
           <h1>Manage {getTableTitle()}</h1>
         </div>
-        {tableType !== "users" && (
+        {tableType !== "users" && canWriteMasterData(userRole, tableType) && (
           <button className="primary-button" onClick={() => { setActiveItem(null); setIsOpen(true); }} type="button">
             <Plus size={15} />
             Add Record
@@ -440,12 +442,16 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, showT
                       {tableType !== "users" && (
                         <td style={{ textAlign: "right" }}>
                           <div className="row-actions">
-                            <button onClick={() => { setActiveItem(item); setIsOpen(true); }} aria-label="Edit record" type="button">
-                              <Pencil size={13} />
-                            </button>
-                            <button className="delete-btn" onClick={() => handleDelete(item.id)} aria-label="Delete record" type="button">
-                              <Trash2 size={13} />
-                            </button>
+                            {canWriteMasterData(userRole, tableType) && (
+                              <button onClick={() => { setActiveItem(item); setIsOpen(true); }} aria-label="Edit record" type="button">
+                                <Pencil size={13} />
+                              </button>
+                            )}
+                            {canDeleteMasterData(userRole, tableType) && (
+                              <button className="delete-btn" onClick={() => handleDelete(item.id)} aria-label="Delete record" type="button">
+                                <Trash2 size={13} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       )}

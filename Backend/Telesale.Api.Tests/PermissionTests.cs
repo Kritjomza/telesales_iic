@@ -195,6 +195,42 @@ public class PermissionTests
     }
 
     [Fact]
+    public async Task TestSuperAdminDeleteCustomerWithChildren_CascadeDeletes()
+    {
+        using var db = GetInMemoryDbContext();
+        var superUser = CreateUserPrincipal(6, AppRoles.SuperAdmin);
+        
+        var c = new customer { id = 1, name = "CustomerToCascade", owner_id = 10, status = "New", create_type = "Key", is_active = true };
+        db.customers.Add(c);
+
+        var d = new detail { id = 100, cust_id = 1, contact_name = "Contact 1", bak_point = 0, point = 0, total_point = 0, is_active = true };
+        db.details.Add(d);
+
+        var dev = new detail_device { id = 200, dtl_id = 100, progress_status = "New" };
+        db.detail_devices.Add(dev);
+
+        var pj = new detail_pj { id = 300, dtl_id = 100, progress_status = "Discuss" };
+        db.detail_pjs.Add(pj);
+
+        await db.SaveChangesAsync();
+
+        var controller = new CustomersController(db);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = superUser }
+        };
+
+        var result = await controller.DeleteCustomer(1, default);
+        Assert.IsType<OkObjectResult>(result);
+
+        // Verify all related records are removed from DB sets
+        Assert.Empty(await db.customers.ToListAsync());
+        Assert.Empty(await db.details.ToListAsync());
+        Assert.Empty(await db.detail_devices.ToListAsync());
+        Assert.Empty(await db.detail_pjs.ToListAsync());
+    }
+
+    [Fact]
     public async Task TestNotifyAdminEditFilter_TriggersForAdmin()
     {
         var emailService = new MockEmailService();
