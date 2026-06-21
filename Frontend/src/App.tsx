@@ -159,8 +159,8 @@ function App() {
           alignItems: "center",
           justifyContent: "center",
           minHeight: "100vh",
-          background: "linear-gradient(135deg, #020617 0%, #071426 46%, #0a2a52 100%)",
-          color: "#94a3b8",
+          background: "var(--iic-dark)",
+          color: "var(--iic-muted)",
           fontFamily: "var(--font-family)",
           fontSize: "14px"
         }}

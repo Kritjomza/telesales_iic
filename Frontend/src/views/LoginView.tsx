@@ -44,7 +44,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
         alignItems: "center",
         justifyContent: "center",
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #020617 0%, #071426 46%, #0a2a52 100%)",
+        background: "radial-gradient(circle at 20% 10%, rgba(0, 91, 187, 0.13), transparent 28%), linear-gradient(135deg, #f8fafc 0%, #eef5fd 46%, #dfeaf7 100%)",
         padding: "20px"
       }}
     >
@@ -53,7 +53,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
         style={{
           width: "100%",
           maxWidth: "400px",
-          background: "var(--iic-navy)",
+          background: "var(--iic-card)",
           border: "1px solid var(--iic-border)",
           borderRadius: "8px",
           boxShadow: "var(--shadow-lg)",
@@ -68,7 +68,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
             style={{
               width: "48px",
               height: "48px",
-              background: "var(--iic-blue)",
+              background: "var(--iic-navy)",
               color: "#ffffff",
               borderRadius: "8px",
               display: "grid",
@@ -80,7 +80,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
           >
             IIC
           </div>
-          <h1 style={{ fontSize: "20px", fontWeight: 700, color: "var(--iic-text)" }}>Sign In</h1>
+          <h1 style={{ fontSize: "20px", fontWeight: 700, color: "var(--iic-black)" }}>Sign In</h1>
           <p style={{ fontSize: "13px", color: "var(--iic-muted)", marginTop: "4px" }}>
             IIC Telesales Modernization System
           </p>
