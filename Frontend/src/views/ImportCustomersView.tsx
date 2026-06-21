@@ -796,7 +796,22 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
                 </div>
               )}
 
-              <div style={{ marginTop: "auto" }}>
+              <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
+                <button
+                  className="ghost-button"
+                  onClick={async () => {
+                    try {
+                      await apiService.downloadTemplate("manage");
+                    } catch (err: any) {
+                      showToast(err.message || "Failed to download template.", "error");
+                    }
+                  }}
+                  type="button"
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", border: "1px solid var(--border-color)" }}
+                >
+                  <FileSpreadsheet size={16} />
+                  Download Template
+                </button>
                 <button
                   className="primary-button"
                   onClick={handlePreview}

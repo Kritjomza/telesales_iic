@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Upload } from "lucide-react";
 import { apiService } from "../domain/apiService";
 import type { Brand, Product, AntivirusPrice, Category, Competitor, Profile, User } from "../domain/types";
 import { Drawer } from "../components/Drawer";
 import { ForbiddenView } from "./ForbiddenView";
 import { canWriteMasterData, canDeleteMasterData } from "../domain/permissions";
+import { ImportMasterDataModal } from "../components/ImportMasterDataModal";
 
 export type MasterTableType = 
   | "profiles" 
@@ -30,6 +31,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
   const [categories, setCategories] = useState<Category[]>([]);
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [activeItem, setActiveItem] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isForbidden, setIsForbidden] = useState(false);
@@ -247,10 +249,23 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
           <h1>Manage {getTableTitle()}</h1>
         </div>
         {tableType !== "users" && canWriteMasterData(userRole, tableType) && (
-          <button className="primary-button" onClick={() => { setActiveItem(null); setIsOpen(true); }} type="button">
-            <Plus size={15} />
-            Add Record
-          </button>
+          <div style={{ display: "flex", gap: "8px" }}>
+            {(tableType === "profiles" || tableType === "antiviruspricelist") && (
+              <button
+                className="ghost-button"
+                onClick={() => setIsImportOpen(true)}
+                type="button"
+                style={{ display: "flex", alignItems: "center", gap: "6px", border: "1px solid var(--border-color)", padding: "6px 12px" }}
+              >
+                <Upload size={15} />
+                Import
+              </button>
+            )}
+            <button className="primary-button" onClick={() => { setActiveItem(null); setIsOpen(true); }} type="button">
+              <Plus size={15} />
+              Add Record
+            </button>
+          </div>
         )}
       </header>
 
@@ -628,6 +643,16 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
           </footer>
         </form>
       </Drawer>
+
+      {(tableType === "profiles" || tableType === "antiviruspricelist") && (
+        <ImportMasterDataModal
+          isOpen={isImportOpen}
+          onClose={() => setIsImportOpen(false)}
+          tableType={tableType}
+          onImportSuccess={loadTableData}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 };

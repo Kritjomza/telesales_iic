@@ -89,6 +89,625 @@ public class ImportController : ControllerBase
         return false;
     }
 
+    private string GetMimeType(string filePath)
+    {
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        return ext switch
+        {
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".csv" => "text/csv",
+            _ => "application/octet-stream"
+        };
+    }
+
+    [HttpGet("templates/manage")]
+    public IActionResult DownloadManageTemplate()
+    {
+        var templateDir = Path.Combine(Directory.GetCurrentDirectory(), "templates");
+        var path = Path.GetFullPath(Path.Combine(templateDir, "manage-import-template.xlsx"));
+        if (!path.StartsWith(templateDir, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest("Invalid template path.");
+        }
+        if (!System.IO.File.Exists(path))
+        {
+            return NotFound(new { message = "Template file not found." });
+        }
+        return PhysicalFile(path, GetMimeType(path), "manage-import-template.xlsx");
+    }
+
+    [HttpGet("templates/profile")]
+    public IActionResult DownloadProfileTemplate()
+    {
+        var templateDir = Path.Combine(Directory.GetCurrentDirectory(), "templates");
+        var path = Path.GetFullPath(Path.Combine(templateDir, "profile-import-template.xlsx"));
+        if (!path.StartsWith(templateDir, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest("Invalid template path.");
+        }
+        if (!System.IO.File.Exists(path))
+        {
+            return NotFound(new { message = "Template file not found." });
+        }
+        return PhysicalFile(path, GetMimeType(path), "profile-import-template.xlsx");
+    }
+
+    [HttpGet("templates/antivirus-price-list")]
+    public IActionResult DownloadAntivirusPriceListTemplate()
+    {
+        var templateDir = Path.Combine(Directory.GetCurrentDirectory(), "templates");
+        var path = Path.GetFullPath(Path.Combine(templateDir, "antivirus-price-list-import-template.xlsx"));
+        if (!path.StartsWith(templateDir, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest("Invalid template path.");
+        }
+        if (!System.IO.File.Exists(path))
+        {
+            return NotFound(new { message = "Template file not found." });
+        }
+        return PhysicalFile(path, GetMimeType(path), "antivirus-price-list-import-template.xlsx");
+    }
+
+    [HttpPost("manage")]
+    public async Task<IActionResult> ImportManage(IFormFile file, [FromQuery] bool commit = false, CancellationToken cancellationToken = default)
+    {
+        var role = User.GetUserRole();
+        if (!AppRoles.IsAdminRole(role) && role != AppRoles.Manager)
+        {
+            return Forbid();
+        }
+
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "No file uploaded or file is empty." });
+        }
+
+        if (file.Length > MaxFileSizeBytes)
+        {
+            return BadRequest(new { message = "File size exceeds the 10MB limit." });
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (extension != ".csv" && extension != ".xlsx")
+        {
+            return BadRequest(new { message = "Unsupported file format. Please upload a .csv or .xlsx file." });
+        }
+
+        var userId = User.GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            using (var uploadStream = file.OpenReadStream())
+            {
+                if (!ValidateFileMagicBytes(uploadStream, extension))
+                {
+                    return BadRequest(new { message = "File content validation failed. The file structure does not match the extension." });
+                }
+            }
+
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            var columns = new List<string>();
+            var previewRows = new List<object>();
+            var rowErrors = new List<object>();
+            var parsedCustomers = new List<customer>();
+            var parsedDetails = new List<detail>();
+            int rowIndex = 1;
+
+            using (var stream = file.OpenReadStream())
+            {
+                using (var reader = extension == ".csv"
+                    ? ExcelReaderFactory.CreateCsvReader(stream)
+                    : ExcelReaderFactory.CreateOpenXmlReader(stream))
+                {
+                    if (reader.Read())
+                    {
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            columns.Add(reader.GetValue(i)?.ToString()?.Trim() ?? $"Column_{i + 1}");
+                        }
+                    }
+                    else
+                    {
+                        return BadRequest(new { message = "The uploaded file has no columns or data." });
+                    }
+
+                    int companyNameIdx = columns.FindIndex(c => string.Equals(c, "company_name", StringComparison.OrdinalIgnoreCase));
+                    int addressIdx = columns.FindIndex(c => string.Equals(c, "address", StringComparison.OrdinalIgnoreCase));
+                    int contactNameIdx = columns.FindIndex(c => string.Equals(c, "contact_name", StringComparison.OrdinalIgnoreCase));
+                    int emailIdx = columns.FindIndex(c => string.Equals(c, "email", StringComparison.OrdinalIgnoreCase));
+                    int phoneIdx = columns.FindIndex(c => string.Equals(c, "phone", StringComparison.OrdinalIgnoreCase));
+
+                    if (companyNameIdx == -1 || addressIdx == -1 || contactNameIdx == -1 || emailIdx == -1 || phoneIdx == -1)
+                    {
+                        return BadRequest(new { message = "Missing required columns. 'company_name', 'address', 'contact_name', 'email', and 'phone' are required." });
+                    }
+
+                    var emailRegex = new System.Text.RegularExpressions.Regex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$");
+
+                    while (reader.Read())
+                    {
+                        rowIndex++;
+                        var companyName = companyNameIdx < reader.FieldCount ? reader.GetValue(companyNameIdx)?.ToString()?.Trim() : null;
+                        var address = addressIdx < reader.FieldCount ? reader.GetValue(addressIdx)?.ToString()?.Trim() : null;
+                        var contactName = contactNameIdx < reader.FieldCount ? reader.GetValue(contactNameIdx)?.ToString()?.Trim() : null;
+                        var email = emailIdx < reader.FieldCount ? reader.GetValue(emailIdx)?.ToString()?.Trim() : null;
+                        var phone = phoneIdx < reader.FieldCount ? reader.GetValue(phoneIdx)?.ToString()?.Trim() : null;
+
+                        var rowIssues = new List<string>();
+                        if (string.IsNullOrWhiteSpace(companyName))
+                        {
+                            rowIssues.Add("Company Name is required.");
+                        }
+                        if (string.IsNullOrWhiteSpace(address))
+                        {
+                            rowIssues.Add("Address is required.");
+                        }
+                        if (!string.IsNullOrEmpty(email) && !emailRegex.IsMatch(email))
+                        {
+                            rowIssues.Add($"Email '{email}' is invalid.");
+                        }
+                        if (!string.IsNullOrEmpty(phone))
+                        {
+                            var cleanPhone = new string(phone.Where(char.IsDigit).ToArray());
+                            if (cleanPhone.Length < 9 || cleanPhone.Length > 10)
+                            {
+                                rowIssues.Add($"Phone '{phone}' is invalid. Must be 9 or 10 digits.");
+                            }
+                        }
+
+                        if (rowIssues.Count > 0)
+                        {
+                            rowErrors.Add(new { row = rowIndex, issues = rowIssues });
+                        }
+
+                        var cust = new customer
+                        {
+                            name = companyName ?? string.Empty,
+                            address = address ?? string.Empty,
+                            phone = phone,
+                            status = "New",
+                            create_type = "Import",
+                            is_active = true,
+                            created_at = DateTime.UtcNow,
+                            updated_at = DateTime.UtcNow,
+                            start_dt = DateOnly.FromDateTime(DateTime.Today),
+                            owner_id = (int)userId.Value
+                        };
+                        parsedCustomers.Add(cust);
+
+                        var det = new detail
+                        {
+                            contact_name = contactName,
+                            contact_email = email ?? string.Empty,
+                            contact_tel = phone ?? string.Empty,
+                            is_active = true,
+                            created_at = DateTime.UtcNow,
+                            updated_at = DateTime.UtcNow
+                        };
+                        parsedDetails.Add(det);
+
+                        if (previewRows.Count < 50)
+                        {
+                            previewRows.Add(new
+                            {
+                                row = rowIndex,
+                                companyName,
+                                address,
+                                contactName,
+                                email,
+                                phone,
+                                issues = rowIssues
+                            });
+                        }
+                    }
+                }
+            }
+
+            bool isValid = rowErrors.Count == 0;
+
+            if (isValid && commit)
+            {
+                using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+                try
+                {
+                    for (int i = 0; i < parsedCustomers.Count; i++)
+                    {
+                        var cust = parsedCustomers[i];
+                        var det = parsedDetails[i];
+
+                        _db.customers.Add(cust);
+                        await _db.SaveChangesAsync(cancellationToken);
+
+                        det.cust_id = cust.id;
+                        _db.details.Add(det);
+                    }
+                    await _db.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync(CancellationToken.None);
+                    return BadRequest(new { message = $"Failed to save customers to database: {ex.Message}" });
+                }
+            }
+
+            return Ok(new
+            {
+                isValid,
+                totalRows = parsedCustomers.Count,
+                errors = rowErrors,
+                previewRows
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to import customers via manage endpoint");
+            return BadRequest(new { message = $"Failed to parse the file: {ex.Message}" });
+        }
+    }
+
+    [HttpPost("profile")]
+    public async Task<IActionResult> ImportProfile(IFormFile file, [FromQuery] bool commit = false, CancellationToken cancellationToken = default)
+    {
+        var role = User.GetUserRole();
+        if (!AppRoles.IsAdminRole(role) && role != AppRoles.Manager)
+        {
+            return Forbid();
+        }
+
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "No file uploaded or file is empty." });
+        }
+
+        if (file.Length > MaxFileSizeBytes)
+        {
+            return BadRequest(new { message = "File size exceeds the 10MB limit." });
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (extension != ".csv" && extension != ".xlsx")
+        {
+            return BadRequest(new { message = "Unsupported file format. Please upload a .csv or .xlsx file." });
+        }
+
+        try
+        {
+            using (var uploadStream = file.OpenReadStream())
+            {
+                if (!ValidateFileMagicBytes(uploadStream, extension))
+                {
+                    return BadRequest(new { message = "File content validation failed. The file structure does not match the extension." });
+                }
+            }
+
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            var columns = new List<string>();
+            var parsedRows = new List<profile>();
+            var previewRows = new List<object>();
+            var rowErrors = new List<object>();
+            int rowIndex = 1;
+
+            using (var stream = file.OpenReadStream())
+            {
+                using (var reader = extension == ".csv"
+                    ? ExcelReaderFactory.CreateCsvReader(stream)
+                    : ExcelReaderFactory.CreateOpenXmlReader(stream))
+                {
+                    if (reader.Read())
+                    {
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            columns.Add(reader.GetValue(i)?.ToString()?.Trim() ?? $"Column_{i + 1}");
+                        }
+                    }
+                    else
+                    {
+                        return BadRequest(new { message = "The uploaded file has no columns or data." });
+                    }
+
+                    int nameIdx = columns.FindIndex(c => string.Equals(c, "name", StringComparison.OrdinalIgnoreCase));
+                    int typeIdx = columns.FindIndex(c => string.Equals(c, "type", StringComparison.OrdinalIgnoreCase));
+                    int itemsIdx = columns.FindIndex(c => string.Equals(c, "items", StringComparison.OrdinalIgnoreCase));
+                    int editionsIdx = columns.FindIndex(c => string.Equals(c, "editions", StringComparison.OrdinalIgnoreCase));
+
+                    if (nameIdx == -1 || typeIdx == -1)
+                    {
+                        return BadRequest(new { message = "Missing required columns. 'name' and 'type' are required." });
+                    }
+
+                    while (reader.Read())
+                    {
+                        rowIndex++;
+                        var name = nameIdx < reader.FieldCount ? reader.GetValue(nameIdx)?.ToString()?.Trim() : null;
+                        var type = typeIdx < reader.FieldCount ? reader.GetValue(typeIdx)?.ToString()?.Trim() : null;
+                        var items = itemsIdx >= 0 && itemsIdx < reader.FieldCount ? reader.GetValue(itemsIdx)?.ToString()?.Trim() : null;
+                        var editions = editionsIdx >= 0 && editionsIdx < reader.FieldCount ? reader.GetValue(editionsIdx)?.ToString()?.Trim() : null;
+
+                        var rowIssues = new List<string>();
+                        if (string.IsNullOrWhiteSpace(name))
+                        {
+                            rowIssues.Add("Name is required.");
+                        }
+                        if (string.IsNullOrWhiteSpace(type))
+                        {
+                            rowIssues.Add("Type is required.");
+                        }
+
+                        if (rowIssues.Count > 0)
+                        {
+                            rowErrors.Add(new { row = rowIndex, issues = rowIssues });
+                        }
+
+                        var p = new profile
+                        {
+                            name = name ?? string.Empty,
+                            type = type ?? "ANTIVIRUS",
+                            items = items,
+                            editions = editions,
+                            is_active = true,
+                            created_at = DateTime.UtcNow,
+                            updated_at = DateTime.UtcNow
+                        };
+                        parsedRows.Add(p);
+
+                        if (previewRows.Count < 50)
+                        {
+                            previewRows.Add(new
+                            {
+                                row = rowIndex,
+                                name,
+                                type,
+                                items,
+                                editions,
+                                issues = rowIssues
+                            });
+                        }
+                    }
+                }
+            }
+
+            bool isValid = rowErrors.Count == 0;
+
+            if (isValid && commit)
+            {
+                using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+                try
+                {
+                    _db.profiles.AddRange(parsedRows);
+                    await _db.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync(CancellationToken.None);
+                    return BadRequest(new { message = $"Failed to save profiles to database: {ex.Message}" });
+                }
+            }
+
+            return Ok(new
+            {
+                isValid,
+                totalRows = parsedRows.Count,
+                errors = rowErrors,
+                previewRows
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to import profiles");
+            return BadRequest(new { message = $"Failed to parse the file: {ex.Message}" });
+        }
+    }
+
+    [HttpPost("antivirus-price-list")]
+    public async Task<IActionResult> ImportAntivirusPriceList(IFormFile file, [FromQuery] bool commit = false, CancellationToken cancellationToken = default)
+    {
+        var role = User.GetUserRole();
+        if (!AppRoles.IsAdminRole(role) && role != AppRoles.Manager)
+        {
+            return Forbid();
+        }
+
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "No file uploaded or file is empty." });
+        }
+
+        if (file.Length > MaxFileSizeBytes)
+        {
+            return BadRequest(new { message = "File size exceeds the 10MB limit." });
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (extension != ".csv" && extension != ".xlsx")
+        {
+            return BadRequest(new { message = "Unsupported file format. Please upload a .csv or .xlsx file." });
+        }
+
+        try
+        {
+            using (var uploadStream = file.OpenReadStream())
+            {
+                if (!ValidateFileMagicBytes(uploadStream, extension))
+                {
+                    return BadRequest(new { message = "File content validation failed. The file structure does not match the extension." });
+                }
+            }
+
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            var columns = new List<string>();
+            var parsedRows = new List<antivirus_price_list>();
+            var previewRows = new List<object>();
+            var rowErrors = new List<object>();
+            int rowIndex = 1;
+
+            var brands = await _db.brands.AsNoTracking().ToListAsync(cancellationToken);
+
+            using (var stream = file.OpenReadStream())
+            {
+                using (var reader = extension == ".csv"
+                    ? ExcelReaderFactory.CreateCsvReader(stream)
+                    : ExcelReaderFactory.CreateOpenXmlReader(stream))
+                {
+                    if (reader.Read())
+                    {
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            columns.Add(reader.GetValue(i)?.ToString()?.Trim() ?? $"Column_{i + 1}");
+                        }
+                    }
+                    else
+                    {
+                        return BadRequest(new { message = "The uploaded file has no columns or data." });
+                    }
+
+                    int codeIdx = columns.FindIndex(c => string.Equals(c, "code", StringComparison.OrdinalIgnoreCase));
+                    int startIdx = columns.FindIndex(c => string.Equals(c, "start", StringComparison.OrdinalIgnoreCase));
+                    int endIdx = columns.FindIndex(c => string.Equals(c, "end", StringComparison.OrdinalIgnoreCase));
+                    int costIdx = columns.FindIndex(c => string.Equals(c, "cost", StringComparison.OrdinalIgnoreCase));
+
+                    if (codeIdx == -1 || startIdx == -1 || endIdx == -1 || costIdx == -1)
+                    {
+                        return BadRequest(new { message = "Missing required columns. 'code', 'start', 'end', and 'cost' are required." });
+                    }
+
+                    while (reader.Read())
+                    {
+                        rowIndex++;
+                        var code = codeIdx < reader.FieldCount ? reader.GetValue(codeIdx)?.ToString()?.Trim() : null;
+                        var startVal = startIdx < reader.FieldCount ? reader.GetValue(startIdx)?.ToString()?.Trim() : null;
+                        var endVal = endIdx < reader.FieldCount ? reader.GetValue(endIdx)?.ToString()?.Trim() : null;
+                        var costVal = costIdx < reader.FieldCount ? reader.GetValue(costIdx)?.ToString()?.Trim() : null;
+
+                        var rowIssues = new List<string>();
+                        if (string.IsNullOrWhiteSpace(code))
+                        {
+                            rowIssues.Add("Code is required.");
+                        }
+
+                        int start = 0;
+                        if (string.IsNullOrWhiteSpace(startVal))
+                        {
+                            rowIssues.Add("Start is required.");
+                        }
+                        else if (!int.TryParse(startVal, out start) || start <= 0)
+                        {
+                            rowIssues.Add("Start must be a positive integer.");
+                        }
+
+                        int end = 0;
+                        if (string.IsNullOrWhiteSpace(endVal))
+                        {
+                            rowIssues.Add("End is required.");
+                        }
+                        else if (!int.TryParse(endVal, out end) || end <= 0)
+                        {
+                            rowIssues.Add("End must be a positive integer.");
+                        }
+
+                        if (start > 0 && end > 0 && start > end)
+                        {
+                            rowIssues.Add("Start must be less than or equal to End.");
+                        }
+
+                        double cost = 0.0;
+                        if (string.IsNullOrWhiteSpace(costVal))
+                        {
+                            rowIssues.Add("Cost is required.");
+                        }
+                        else if (!double.TryParse(costVal, out cost) || cost < 0)
+                        {
+                            rowIssues.Add("Cost must be a non-negative number.");
+                        }
+
+                        if (rowIssues.Count > 0)
+                        {
+                            rowErrors.Add(new { row = rowIndex, issues = rowIssues });
+                        }
+
+                        string brandName = "Kaspersky";
+                        if (!string.IsNullOrWhiteSpace(code))
+                        {
+                            var matchedBrand = brands.FirstOrDefault(b => b.name != null &&
+                                b.name.Substring(0, Math.Min(b.name.Length, 3)).Equals(code, StringComparison.OrdinalIgnoreCase));
+                            if (matchedBrand != null)
+                            {
+                                brandName = matchedBrand.name;
+                            }
+                            else
+                            {
+                                brandName = code;
+                            }
+                        }
+
+                        var apl = new antivirus_price_list
+                        {
+                            brand = brandName,
+                            code = code,
+                            edition = string.Empty,
+                            start = start,
+                            end = end,
+                            cost = cost,
+                            types = "Client",
+                            created_at = DateTime.UtcNow,
+                            updated_at = DateTime.UtcNow
+                        };
+                        parsedRows.Add(apl);
+
+                        if (previewRows.Count < 50)
+                        {
+                            previewRows.Add(new
+                            {
+                                row = rowIndex,
+                                code,
+                                start = startVal,
+                                end = endVal,
+                                cost = costVal,
+                                issues = rowIssues
+                            });
+                        }
+                    }
+                }
+            }
+
+            bool isValid = rowErrors.Count == 0;
+
+            if (isValid && commit)
+            {
+                using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+                try
+                {
+                    _db.antivirus_price_lists.AddRange(parsedRows);
+                    await _db.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync(CancellationToken.None);
+                    return BadRequest(new { message = $"Failed to save antivirus price lists to database: {ex.Message}" });
+                }
+            }
+
+            return Ok(new
+            {
+                isValid,
+                totalRows = parsedRows.Count,
+                errors = rowErrors,
+                previewRows
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to import antivirus price lists");
+            return BadRequest(new { message = $"Failed to parse the file: {ex.Message}" });
+        }
+    }
+
     [HttpPost("customers/preview")]
     public async Task<IActionResult> PreviewCustomers(IFormFile file, CancellationToken cancellationToken)
     {
