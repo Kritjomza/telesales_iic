@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { 
   Users, UserCheck, ShieldCheck, FileText, Search, Plus, 
-  FileDown, Pencil, Trash2, ArrowLeft, Laptop, Target, Check, AlertCircle, Info 
+  FileDown, Pencil, Trash2, ArrowLeft, Laptop, Target, Check, AlertCircle, Info,
+  FileSpreadsheet
 } from "lucide-react";
 import { apiService } from "../domain/apiService";
+import { ImportMasterDataModal } from "../components/ImportMasterDataModal";
 import type { Customer, ContactDetail, DetailDevice, DetailProject, User, Category, Competitor } from "../domain/types";
 import { Drawer } from "../components/Drawer";
 
@@ -72,7 +74,6 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
 
   // Import flow states
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importPreviewRows, setImportPreviewRows] = useState<any[]>([]);
 
   // Contact Drawer triggers
   const [isContactDrawerOpen, setIsContactDrawerOpen] = useState(false);
@@ -563,44 +564,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     }
   };
 
-  // Import Flow: Mock Excel File Reading
-  const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const mockedRows = [
-        { name: "บจก. เทคโนโลยี แอดวานซ์", address: "ลาดพร้าว กรุงเทพฯ", capital: "10,000,000", bt_type: "Telco", contact_name: "คุณ สมภพ", contact_email: "somphop@techadv.co.th" },
-        { name: "บจก. กรุงเทพ โลจิสติกส์", address: "บางนา กรุงเทพฯ", capital: "5,000,000", bt_type: "Transport Logistics", contact_name: "คุณ พรรณนา", contact_email: "pannana@bkklog.com" },
-        { name: "บจก. อาหารดีเจริญ", address: "เมือง นนทบุรี", capital: "2,000,000", bt_type: "Drink", contact_name: "คุณ ชูเกียรติ", contact_email: "chukiart@goodfood.com" }
-      ];
-      setImportPreviewRows(mockedRows);
-    }
-  };
 
-  const handleCommitImport = async () => {
-    setIsLoading(true);
-    try {
-      for (const row of importPreviewRows) {
-        await apiService.addCustomer({
-          name: row.name,
-          address: row.address,
-          capital: row.capital,
-          bt_type: row.bt_type,
-          status: "New",
-          is_active: true,
-          telesale_id: null,
-          sale_id: null,
-          start_dt: new Date().toISOString().split("T")[0]
-        });
-      }
-      refreshCustomers();
-      setImportPreviewRows([]);
-      setIsImportModalOpen(false);
-      showToast(`Successfully imported ${importPreviewRows.length} customers!`, "success");
-    } catch (err) {
-      showToast("Import failed", "error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   if (isForbidden) {
     return <ForbiddenView />;
@@ -618,10 +582,27 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
             </div>
             <div className="topbar-actions">
               {(isAdmin || isSupervisor) && (
-                <button className="secondary-button" onClick={() => setIsImportModalOpen(true)} type="button">
-                  <FileDown size={15} />
-                  Import
-                </button>
+                <>
+                  <button
+                    className="secondary-button"
+                    onClick={async () => {
+                      try {
+                        await apiService.downloadTemplate("manage");
+                      } catch (err: any) {
+                        showToast(err.message || "Failed to download template.", "error");
+                      }
+                    }}
+                    type="button"
+                    style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                  >
+                    <FileSpreadsheet size={15} />
+                    Template
+                  </button>
+                  <button className="secondary-button" onClick={() => setIsImportModalOpen(true)} type="button">
+                    <FileDown size={15} />
+                    Import
+                  </button>
+                </>
               )}
               <button className="primary-button" onClick={() => { setActiveCustomer(null); setIsCustomerDrawerOpen(true); }} type="button">
                 <Plus size={15} />
@@ -1351,60 +1332,15 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
 
 
 
-      {/* 3. Excel Import Mock Modal */}
+      {/* 3. Excel Import Modal */}
       {isImportModalOpen && (
-        <Drawer
+        <ImportMasterDataModal
           isOpen={isImportModalOpen}
-          title="Import Customers from Excel"
           onClose={() => setIsImportModalOpen(false)}
-        >
-          <div className="import-modal-container">
-            <div className="file-drop-area">
-              <AlertCircle size={24} className="text-info" />
-              <p>Select customer datasheet file (.xls, .xlsx) to simulate parsing.</p>
-              <input
-                type="file"
-                accept=".xls,.xlsx"
-                onChange={handleImportFileChange}
-                aria-label="Upload excel file"
-              />
-            </div>
-
-            {importPreviewRows.length > 0 && (
-              <div className="import-preview-box">
-                <h4>Preview parsed data ({importPreviewRows.length} rows)</h4>
-                <div className="table-wrap table-scroll-sm">
-                  <table className="corporate-table compact" aria-label="Excel parsed row preview table">
-                    <thead>
-                      <tr>
-                        <th>Company Name</th>
-                        <th>Address</th>
-                        <th>Business Type</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {importPreviewRows.map((r, i) => (
-                        <tr key={i}>
-                          <td>{r.name}</td>
-                          <td>{r.address}</td>
-                          <td>{r.bt_type}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="action-row" style={{ marginTop: "16px" }}>
-                  <button className="ghost-button" onClick={() => setImportPreviewRows([])} type="button">Reset</button>
-                  <button className="primary-button" onClick={handleCommitImport} type="button">
-                    <Check size={14} aria-hidden="true" />
-                    Commit Import
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </Drawer>
+          tableType="manage"
+          onImportSuccess={refreshCustomers}
+          showToast={showToast}
+        />
       )}
 
       {/* 4. Contact Person Add/Edit Drawer */}

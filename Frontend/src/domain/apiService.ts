@@ -663,200 +663,22 @@ export const apiService = {
     const mappingsJson = JSON.stringify(mappings);
     return `${API_BASE}/import/customers/export-errors?fileId=${encodeURIComponent(fileId)}&mappingsJson=${encodeURIComponent(mappingsJson)}`;
   },
-  },
-  async addProfile(profile: Omit<Profile, "id">): Promise<Profile> {
-    return request<Profile>("/masterdata/profiles", {
-      method: "POST",
-      body: JSON.stringify(profile)
-    });
-  },
-  async updateProfile(id: number, profile: Partial<Profile>): Promise<Profile> {
-    return request<Profile>(`/masterdata/profiles/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(profile)
-    });
-  },
-  async deleteProfile(id: number): Promise<boolean> {
-    return request<boolean>(`/masterdata/profiles/${id}`, {
-      method: "DELETE",
-      skipForbiddenRedirect: true
-    } as any);
-  },
-
-  // Reports
-  async getReports(): Promise<{ projectLedger: any[]; agentPerformance: any[] }> {
-    return request<{ projectLedger: any[]; agentPerformance: any[] }>("/customers/reports/all");
-  },
-
-  // Customer Import API calls
-  async previewCustomerImport(file: File): Promise<{
-    columns: string[];
-    sampleRows: Record<string, string>[];
-    totalRows: number;
-    fileId: string;
-  }> {
-    const formData = new FormData();
-    formData.append("file", file);
-    const response = await fetch(`${API_BASE}/import/customers/preview`, {
-      method: "POST",
-      body: formData
+  async downloadTemplate(type: "manage" | "profile" | "antivirus-price-list"): Promise<void> {
+    const response = await fetch(`${API_BASE}/import/templates/${type}`, {
+      method: "GET"
     });
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new ApiError(response.status, errorText || `API error ${response.status}`);
+      throw new ApiError(response.status, "Failed to download template.");
     }
-    return response.json();
-  },
-
-  async suggestMappings(columns: string[]): Promise<{ mappings: { column: string; targetField: string }[]; confidence: number }> {
-    return request<{ mappings: { column: string; targetField: string }[]; confidence: number }>("/import/customers/suggest-mappings", {
-      method: "POST",
-      body: JSON.stringify({ columns })
-    });
-  },
-
-  async extractUnstructuredData(text: string): Promise<any> {
-    return request<any>("/import/customers/extract-unstructured", {
-      method: "POST",
-      body: JSON.stringify({ text })
-    });
-  },
-
-  async validateImportFilePage(
-    fileId: string,
-    page: number,
-    pageSize: number,
-    mappings: Record<string, string>,
-    policy: string,
-    mappingConfidence: number
-  ): Promise<{ rows: any[]; summary: any }> {
-    return request<{ rows: any[]; summary: any }>("/import/customers/validate-file", {
-      method: "POST",
-      body: JSON.stringify({ fileId, page, pageSize, mappings, policy, mappingConfidence })
-    });
-  },
-
-  async validateImportRows(rows: any[]): Promise<{ rows: any[]; summary: any }> {
-    const normalized = rows.map((r: any) => ({
-      name: r.name,
-      address: r.address,
-      phone: r.phone,
-      capital: r.capital,
-      businessType: r.businessType !== undefined ? r.businessType : r.business_type,
-      contactName: r.contactName !== undefined ? r.contactName : r.contact_name,
-      contactEmail: r.contactEmail !== undefined ? r.contactEmail : r.contact_email,
-      contactTel: r.contactTel !== undefined ? r.contactTel : r.contact_tel,
-      contactPosition: r.contactPosition !== undefined ? r.contactPosition : r.contact_position,
-      code: r.code,
-      unstructuredCompanyInfo: r.unstructuredCompanyInfo !== undefined ? r.unstructuredCompanyInfo : r.unstructured_company_info
-    }));
-    return request<{ rows: any[]; summary: any }>("/import/customers/validate", {
-      method: "POST",
-      body: JSON.stringify(normalized)
-    });
-  },
-
-  async previewCustomerImportPage(fileId: string, page: number, pageSize: number): Promise<Record<string, string>[]> {
-    return request<Record<string, string>[]>(`/import/customers/preview-page?fileId=${encodeURIComponent(fileId)}&page=${page}&pageSize=${pageSize}`);
-  },
-
-  async explainIssue(
-    issueType: string,
-    fieldName: string,
-    fieldValue: string,
-    issueDetails: string,
-    matchedCustomerDetails?: string
-  ): Promise<{ explanation: string }> {
-    return request<{ explanation: string }>("/import/customers/explain-issue", {
-      method: "POST",
-      body: JSON.stringify({ issueType, fieldName, fieldValue, issueDetails, matchedCustomerDetails })
-    });
-  },
-
-  async commitImportRowsStream(
-    payload: {
-      fileId: string;
-      mappings: Record<string, string>;
-      saleId: number | null;
-      telesaleId: number | null;
-      fileName: string;
-      rowOverrides: Record<number, string>;
-    },
-    onProgress: (progress: any) => void,
-    signal?: AbortSignal
-  ): Promise<void> {
-    const url = `${API_BASE}/import/customers/commit-stream`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload),
-      signal
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new ApiError(response.status, errorText || `API error ${response.status}`);
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error("Response body is not readable.");
-    }
-
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.trim()) {
-            try {
-              const progress = JSON.parse(line);
-              onProgress(progress);
-            } catch (err) {
-              console.error("Failed to parse progress chunk:", err, line);
-            }
-          }
-        }
-      }
-
-      if (buffer.trim()) {
-        try {
-          const progress = JSON.parse(buffer);
-          onProgress(progress);
-        } catch (err) {
-          console.error("Failed to parse final progress chunk:", err, buffer);
-        }
-      }
-    } finally {
-      reader.releaseLock();
-    }
-  },
-
-  async commitImportRows(payload: {
-    rows: any[];
-    saleId: number | null;
-    telesaleId: number | null;
-    fileName: string;
-  }): Promise<any> {
-    return request<any>("/import/customers/commit", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
-  },
-
-  exportErrorsUrl(fileId: string, mappings: Record<string, string>): string {
-    const mappingsJson = JSON.stringify(mappings);
-    return `${API_BASE}/import/customers/export-errors?fileId=${encodeURIComponent(fileId)}&mappingsJson=${encodeURIComponent(mappingsJson)}`;
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${type}-import-template.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
   },
 
   async getImportHistory(): Promise<any[]> {

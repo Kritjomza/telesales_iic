@@ -5,7 +5,7 @@ import { apiService } from "../domain/apiService";
 interface ImportMasterDataModalProps {
   isOpen: boolean;
   onClose: () => void;
-  tableType: "profiles" | "antiviruspricelist";
+  tableType: "manage" | "profiles" | "antiviruspricelist";
   onImportSuccess: () => void;
   showToast: (msg: string, type: "success" | "error" | "info") => void;
 }
@@ -32,8 +32,8 @@ export const ImportMasterDataModal: React.FC<ImportMasterDataModalProps> = ({
 
   if (!isOpen) return null;
 
-  const typeLabel = tableType === "profiles" ? "Profiles" : "Antivirus Price List";
-  const templateType = tableType === "profiles" ? "profile" : "antivirus-price-list";
+  const typeLabel = tableType === "manage" ? "Manage Customers" : tableType === "profiles" ? "Profiles" : "Antivirus Price List";
+  const templateType = tableType === "manage" ? "manage" : tableType === "profiles" ? "profile" : "antivirus-price-list";
 
   const handleFileChange = (selectedFile: File | null) => {
     if (!selectedFile) return;
@@ -88,7 +88,9 @@ export const ImportMasterDataModal: React.FC<ImportMasterDataModalProps> = ({
     try {
       setIsLoading(true);
       let res;
-      if (tableType === "profiles") {
+      if (tableType === "manage") {
+        res = await apiService.importManage(file, false);
+      } else if (tableType === "profiles") {
         res = await apiService.importProfile(file, false);
       } else {
         res = await apiService.importAntivirusPriceList(file, false);
@@ -111,7 +113,9 @@ export const ImportMasterDataModal: React.FC<ImportMasterDataModalProps> = ({
 
     try {
       setIsImporting(true);
-      if (tableType === "profiles") {
+      if (tableType === "manage") {
+        await apiService.importManage(file, true);
+      } else if (tableType === "profiles") {
         await apiService.importProfile(file, true);
       } else {
         await apiService.importAntivirusPriceList(file, true);
@@ -281,7 +285,16 @@ export const ImportMasterDataModal: React.FC<ImportMasterDataModalProps> = ({
                 <div style={{ overflowX: "auto", border: "1px solid var(--border-color)", borderRadius: "var(--border-radius)" }}>
                   <table className="corporate-table" style={{ width: "100%", margin: 0, fontSize: "12px" }}>
                     <thead>
-                      {tableType === "profiles" ? (
+                      {tableType === "manage" ? (
+                        <tr>
+                          <th style={{ width: "10%" }}>Row</th>
+                          <th style={{ width: "25%" }}>Company Name</th>
+                          <th style={{ width: "25%" }}>Address</th>
+                          <th style={{ width: "15%" }}>Contact Name</th>
+                          <th style={{ width: "15%" }}>Email</th>
+                          <th style={{ width: "10%" }}>Phone</th>
+                        </tr>
+                      ) : tableType === "profiles" ? (
                         <tr>
                           <th style={{ width: "10%" }}>Row</th>
                           <th style={{ width: "30%" }}>Name</th>
@@ -305,7 +318,15 @@ export const ImportMasterDataModal: React.FC<ImportMasterDataModalProps> = ({
                         return (
                           <tr key={idx} style={{ background: hasRowError ? "rgba(231, 76, 60, 0.05)" : undefined }}>
                             <td>{r.row}</td>
-                            {tableType === "profiles" ? (
+                            {tableType === "manage" ? (
+                              <>
+                                <td style={{ fontWeight: 600 }}>{r.companyName || <span style={{ color: "var(--error-color)" }}>[Missing]</span>}</td>
+                                <td>{r.address || <span style={{ color: "var(--error-color)" }}>[Missing]</span>}</td>
+                                <td>{r.contactName || "-"}</td>
+                                <td>{r.email || "-"}</td>
+                                <td>{r.phone || "-"}</td>
+                              </>
+                            ) : tableType === "profiles" ? (
                               <>
                                 <td style={{ fontWeight: 600 }}>{r.name || <span style={{ color: "var(--error-color)" }}>[Missing]</span>}</td>
                                 <td>{r.type || <span style={{ color: "var(--error-color)" }}>[Missing]</span>}</td>
