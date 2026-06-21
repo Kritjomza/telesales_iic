@@ -53,8 +53,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
         style={{
           width: "100%",
           maxWidth: "400px",
-          background: "#ffffff",
-          border: "1px solid var(--border)",
+          background: "var(--iic-navy)",
+          border: "1px solid var(--iic-border)",
           borderRadius: "8px",
           boxShadow: "var(--shadow-lg)",
           padding: "32px",
@@ -68,8 +68,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
             style={{
               width: "48px",
               height: "48px",
-              background: "linear-gradient(135deg, #ffffff 0%, #d7eaff 100%)",
-              color: "var(--iic-blue)",
+              background: "var(--iic-blue)",
+              color: "#ffffff",
               borderRadius: "8px",
               display: "grid",
               placeItems: "center",
@@ -80,8 +80,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
           >
             IIC
           </div>
-          <h1 style={{ fontSize: "20px", fontWeight: 700, color: "var(--primary)" }}>Sign In</h1>
-          <p style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "4px" }}>
+          <h1 style={{ fontSize: "20px", fontWeight: 700, color: "var(--iic-text)" }}>Sign In</h1>
+          <p style={{ fontSize: "13px", color: "var(--iic-muted)", marginTop: "4px" }}>
             IIC Telesales Modernization System
           </p>
         </div>
@@ -93,10 +93,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
               alignItems: "center",
               gap: "8px",
               padding: "10px 12px",
-              background: "var(--danger-light)",
-              border: "1px solid #fca5a5",
+              background: "var(--iic-danger-bg)",
+              border: "1px solid var(--iic-danger-border)",
               borderRadius: "6px",
-              color: "var(--danger)",
+              color: "var(--iic-danger)",
               fontSize: "13px"
             }}
           >
@@ -107,7 +107,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div className="form-group">
-            <label htmlFor="username_login" style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)" }}>
+            <label htmlFor="username_login">
               Username
             </label>
             <div style={{ position: "relative" }}>
@@ -129,11 +129,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
                 onChange={(e) => setUsername(e.target.value)}
                 style={{
                   width: "100%",
-                  padding: "10px 12px 10px 36px",
-                  border: "1px solid var(--border)",
-                  borderRadius: "6px",
-                  fontSize: "13px",
-                  outline: 0
+                  padding: "10px 12px 10px 36px"
                 }}
                 disabled={isLoading}
                 autoComplete="username"
@@ -143,7 +139,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
           </div>
 
           <div className="form-group">
-            <label htmlFor="password_login" style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)" }}>
+            <label htmlFor="password_login">
               Password
             </label>
             <div style={{ position: "relative" }}>
@@ -165,11 +161,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
                 onChange={(e) => setPassword(e.target.value)}
                 style={{
                   width: "100%",
-                  padding: "10px 36px 10px 36px",
-                  border: "1px solid var(--border)",
-                  borderRadius: "6px",
-                  fontSize: "13px",
-                  outline: 0
+                  padding: "10px 36px 10px 36px"
                 }}
                 disabled={isLoading}
                 autoComplete="current-password"

@@ -756,10 +756,10 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       height: "30px", 
                       padding: "4px 8px", 
                       borderRadius: "6px", 
-                      border: "1px solid var(--border)", 
+                      border: "1px solid var(--iic-border)", 
                       fontSize: "12px", 
-                      background: "#ffffff", 
-                      color: "var(--primary)",
+                      background: "var(--iic-card)", 
+                      color: "var(--iic-text)",
                       minWidth: "160px"
                     }}
                   >

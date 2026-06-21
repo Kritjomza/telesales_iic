@@ -558,10 +558,10 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
 
           <main className="content animate-fade-in">
             {/* Sheet Preview Panel */}
-            <div className="panel invoice-preview-box" style={{ padding: "36px", background: "#fff", maxWidth: "800px", margin: "0 auto", border: "1px solid #ddd" }}>
-              <div className="invoice-header" style={{ display: "flex", justifyContent: "space-between", borderBottom: "2px solid #333", paddingBottom: "16px" }}>
+            <div className="panel invoice-preview-box" style={{ padding: "36px", background: "var(--iic-card)", maxWidth: "800px", margin: "0 auto", border: "1px solid var(--iic-border)" }}>
+              <div className="invoice-header" style={{ display: "flex", justifyContent: "space-between", borderBottom: "2px solid var(--iic-border)", paddingBottom: "16px" }}>
                 <div>
-                  <h2 style={{ margin: "0", color: "#1e3a8a" }}>ARROW IT SOLUTIONS</h2>
+                  <h2 style={{ margin: "0", color: "var(--iic-blue)" }}>ARROW IT SOLUTIONS</h2>
                   <p style={{ margin: "4px 0 0", color: "gray", fontSize: "13px" }}>Corporate Antivirus License Cost Assessment Sheet</p>
                 </div>
                 <div style={{ textAlign: "right" }}>
@@ -577,14 +577,14 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
                 <div>
                   <h5 style={{ margin: "0 0 6px", color: "gray" }}>CUSTOMER</h5>
                   <strong>{getCustomerName(selectedCostSheet.cust_id)}</strong>
-                  <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#444" }}>
+                  <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--iic-muted)" }}>
                     {customers.find(c => c.id === selectedCostSheet.cust_id)?.address}
                   </p>
                 </div>
                 <div>
                   <h5 style={{ margin: "0 0 6px", color: "gray" }}>PROJECT DETAILS</h5>
                   <strong>{selectedCostSheet.project_name}</strong>
-                  <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#444" }}>
+                  <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--iic-muted)" }}>
                     Brand: {getBrandName(selectedCostSheet.brand_id)}
                   </p>
                 </div>
@@ -592,29 +592,29 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
 
               <table className="corporate-table" aria-label="Cost sheet items table" style={{ marginTop: "32px", width: "100%", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ background: "#f3f4f6" }}>
-                    <th style={{ padding: "10px", borderBottom: "1px solid #ddd", textAlign: "left" }}>Description</th>
-                    <th style={{ padding: "10px", borderBottom: "1px solid #ddd", textAlign: "right" }}>Qty</th>
-                    <th style={{ padding: "10px", borderBottom: "1px solid #ddd", textAlign: "right" }}>Unit Price</th>
-                    <th style={{ padding: "10px", borderBottom: "1px solid #ddd", textAlign: "right" }}>Total Cost</th>
-                    <th style={{ padding: "10px", borderBottom: "1px solid #ddd", textAlign: "right" }}>Total Sale</th>
+                  <tr style={{ background: "var(--iic-surface)" }}>
+                    <th style={{ padding: "10px", borderBottom: "1px solid var(--iic-border)", textAlign: "left" }}>Description</th>
+                    <th style={{ padding: "10px", borderBottom: "1px solid var(--iic-border)", textAlign: "right" }}>Qty</th>
+                    <th style={{ padding: "10px", borderBottom: "1px solid var(--iic-border)", textAlign: "right" }}>Unit Price</th>
+                    <th style={{ padding: "10px", borderBottom: "1px solid var(--iic-border)", textAlign: "right" }}>Total Cost</th>
+                    <th style={{ padding: "10px", borderBottom: "1px solid var(--iic-border)", textAlign: "right" }}>Total Sale</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td style={{ padding: "12px 10px", borderBottom: "1px solid #ddd" }}>
+                    <td style={{ padding: "12px 10px", borderBottom: "1px solid var(--iic-border)" }}>
                       {getProductName(selectedCostSheet.product_id)}
                     </td>
-                    <td style={{ padding: "12px 10px", borderBottom: "1px solid #ddd", textAlign: "right" }}>
+                    <td style={{ padding: "12px 10px", borderBottom: "1px solid var(--iic-border)", textAlign: "right" }}>
                       {selectedCostSheet.qty}
                     </td>
-                    <td style={{ padding: "12px 10px", borderBottom: "1px solid #ddd", textAlign: "right" }}>
+                    <td style={{ padding: "12px 10px", borderBottom: "1px solid var(--iic-border)", textAlign: "right" }}>
                       {selectedCostSheet.sale_price.toLocaleString()} THB
                     </td>
-                    <td style={{ padding: "12px 10px", borderBottom: "1px solid #ddd", textAlign: "right" }}>
+                    <td style={{ padding: "12px 10px", borderBottom: "1px solid var(--iic-border)", textAlign: "right" }}>
                       {(selectedCostSheet.qty * selectedCostSheet.cost_price).toLocaleString()} THB
                     </td>
-                    <td style={{ padding: "12px 10px", borderBottom: "1px solid #ddd", textAlign: "right" }}>
+                    <td style={{ padding: "12px 10px", borderBottom: "1px solid var(--iic-border)", textAlign: "right" }}>
                       {(selectedCostSheet.qty * selectedCostSheet.sale_price).toLocaleString()} THB
                     </td>
                   </tr>
@@ -631,7 +631,7 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
                     <span>Discount:</span>
                     <strong style={{ color: "red" }}>-{selectedCostSheet.discount.toLocaleString()} THB</strong>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #ddd", paddingBottom: "8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--iic-border)", paddingBottom: "8px" }}>
                     <span>Net Sales:</span>
                     <strong>{((selectedCostSheet.qty * selectedCostSheet.sale_price) - selectedCostSheet.discount).toLocaleString()} THB</strong>
                   </div>
@@ -642,7 +642,7 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
                 </div>
               </div>
 
-              <div className="invoice-share" style={{ borderTop: "1px dashed #ddd", marginTop: "32px", paddingTop: "16px" }}>
+              <div className="invoice-share" style={{ borderTop: "1px dashed var(--iic-border)", marginTop: "32px", paddingTop: "16px" }}>
                 <h4 style={{ margin: "0 0 12px" }}>Share Breakdown</h4>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
                   <div>

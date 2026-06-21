@@ -160,7 +160,7 @@ function App() {
           justifyContent: "center",
           minHeight: "100vh",
           background: "linear-gradient(135deg, #020617 0%, #071426 46%, #0a2a52 100%)",
-          color: "#d7eaff",
+          color: "#94a3b8",
           fontFamily: "var(--font-family)",
           fontSize: "14px"
         }}

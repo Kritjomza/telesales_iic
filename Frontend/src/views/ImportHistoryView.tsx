@@ -153,7 +153,7 @@ export const ImportHistoryView: React.FC<ImportHistoryViewProps> = ({ userRole, 
                             {session.importedRows}
                           </td>
                           <td style={{ color: "var(--text-muted)" }}>{session.skippedRows}</td>
-                          <td style={{ color: session.errorRows > 0 ? "#dc2626" : "inherit", fontWeight: session.errorRows > 0 ? "600" : "normal" }}>
+                          <td style={{ color: session.errorRows > 0 ? "var(--iic-danger)" : "inherit", fontWeight: session.errorRows > 0 ? "600" : "normal" }}>
                             {session.errorRows}
                           </td>
                           <td style={{ textAlign: "right" }}>
@@ -177,8 +177,8 @@ export const ImportHistoryView: React.FC<ImportHistoryViewProps> = ({ userRole, 
                         {isExpanded && hasErrors && (
                           <tr>
                             <td colSpan={9} style={{ padding: "12px 24px", background: "rgba(239, 68, 68, 0.02)", borderTop: "none" }}>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "8px", border: "1px solid rgba(180, 35, 24, 0.22)", padding: "12px", borderRadius: "6px", background: "#fff" }}>
-                                <div style={{ fontWeight: "600", color: "#dc2626", fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "8px", border: "1px solid var(--iic-danger-border)", padding: "12px", borderRadius: "6px", background: "var(--iic-card)" }}>
+                                <div style={{ fontWeight: "600", color: "var(--iic-danger)", fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}>
                                   <AlertCircle size={15} />
                                   Execution Errors & Rollback Context
                                 </div>
