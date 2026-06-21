@@ -65,7 +65,7 @@ public class CustomersController : ControllerBase
 
         if (page.HasValue)
         {
-            var size = pageSize ?? 10;
+            var size = pageSize ?? 25;
             if (size <= 0) return BadRequest("Page size must be greater than zero.");
             if (size > 100) return BadRequest("Page size cannot exceed 100.");
             if (page.Value <= 0) return BadRequest("Page number must be greater than zero.");
@@ -226,7 +226,7 @@ public class CustomersController : ControllerBase
         string? missingField,
         CancellationToken cancellationToken)
     {
-        var size = pageSize ?? (page.HasValue ? 10 : 100);
+        var size = pageSize ?? (page.HasValue ? 25 : 100);
         if (size <= 0) return BadRequest("Page size must be greater than zero.");
         if (size > 100) return BadRequest("Page size cannot exceed 100.");
         if (page.HasValue && page.Value <= 0) return BadRequest("Page number must be greater than zero.");

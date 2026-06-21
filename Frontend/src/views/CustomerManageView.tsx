@@ -115,7 +115,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     searchVal: string,
     btFilter: string,
     saleFilter: string,
-    teleFilter: string
+    teleFilter: string,
+    completenessVal?: string,
+    missingFieldVal?: string
   ) => {
     const requestId = customerRequestSeq.current + 1;
     customerRequestSeq.current = requestId;
@@ -128,7 +130,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         search: searchVal,
         businessType: btFilter,
         saleId: saleFilter,
-        telesaleId: teleFilter
+        telesaleId: teleFilter,
+        completeness: completenessVal,
+        missingField: missingFieldVal
       });
 
       if (requestId === customerRequestSeq.current) {
@@ -168,9 +172,11 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
       appliedQuery,
       appliedBusinessType,
       appliedSaleFilter,
-      appliedTelesaleFilter
+      appliedTelesaleFilter,
+      completenessFilter,
+      missingFieldFilter
     );
-  }, [fetchCustomers, page, pageSize, appliedQuery, appliedBusinessType, appliedSaleFilter, appliedTelesaleFilter]);
+  }, [fetchCustomers, page, pageSize, appliedQuery, appliedBusinessType, appliedSaleFilter, appliedTelesaleFilter, completenessFilter, missingFieldFilter]);
 
   const loadInitialData = async () => {
     let shouldLoadSupportingData = false;
@@ -249,7 +255,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         appliedQuery,
         appliedBusinessType,
         appliedSaleFilter,
-        appliedTelesaleFilter
+        appliedTelesaleFilter,
+        completenessFilter,
+        missingFieldFilter
       );
     }
   }, [
@@ -259,6 +267,8 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     appliedBusinessType,
     appliedSaleFilter,
     appliedTelesaleFilter,
+    completenessFilter,
+    missingFieldFilter,
     subView.type,
     fetchCustomers
   ]);
@@ -283,7 +293,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     let list = customers;
 
     // Apply backend-filtering client-side logic only if not already filtered by backend
-    const isBackendFiltered = backendMetrics.total > 0 && backendMetrics.total !== customers.length;
+    const isBackendFiltered = backendMetrics.total > 0;
     if (!isBackendFiltered) {
       list = list.filter(c => {
         const matchQuery = !appliedQuery || `${c.name} ${c.address}`.toLowerCase().includes(appliedQuery.toLowerCase());
@@ -291,14 +301,14 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
 
         return matchQuery && matchBus;
       });
-    }
 
-    // Apply completeness filtering client-side
-    if (completenessFilter !== "all") {
-      list = list.filter(c => customerMatchesQuickFilter(c, completenessFilter));
-    }
-    if (missingFieldFilter !== "all") {
-      list = list.filter(c => customerMatchesQuickFilter(c, missingFieldFilter));
+      // Apply completeness filtering client-side
+      if (completenessFilter !== "all") {
+        list = list.filter(c => customerMatchesQuickFilter(c, completenessFilter));
+      }
+      if (missingFieldFilter !== "all") {
+        list = list.filter(c => customerMatchesQuickFilter(c, missingFieldFilter));
+      }
     }
 
     return list;
