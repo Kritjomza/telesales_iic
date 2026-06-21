@@ -44,7 +44,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
         alignItems: "center",
         justifyContent: "center",
         minHeight: "100vh",
-        background: "#f8fafc",
+        background: "linear-gradient(135deg, #020617 0%, #071426 46%, #0a2a52 100%)",
         padding: "20px"
       }}
     >
@@ -68,8 +68,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
             style={{
               width: "48px",
               height: "48px",
-              background: "var(--primary)",
-              color: "#ffffff",
+              background: "linear-gradient(135deg, #ffffff 0%, #d7eaff 100%)",
+              color: "var(--iic-blue)",
               borderRadius: "8px",
               display: "grid",
               placeItems: "center",
@@ -78,11 +78,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
               fontSize: "18px"
             }}
           >
-            ATS
+            IIC
           </div>
           <h1 style={{ fontSize: "20px", fontWeight: 700, color: "var(--primary)" }}>Sign In</h1>
           <p style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "4px" }}>
-            Telesale Management System
+            IIC Telesales Modernization System
           </p>
         </div>
 

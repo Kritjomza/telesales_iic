@@ -30,7 +30,11 @@ describe("ATS React workspace", () => {
               renewalDays: 45,
               hasCostSheet: false,
               is_active: true,
-              start_dt: "2026-06-01"
+              start_dt: "2026-06-01",
+              primary_contact_name: "Nok",
+              primary_contact_email: "nok@example.com",
+              primary_contact_tel: "0812345678",
+              primary_contact_tel_office: ""
             },
             {
               id: 2,
@@ -43,7 +47,11 @@ describe("ATS React workspace", () => {
               renewalDays: 7,
               hasCostSheet: false,
               is_active: true,
-              start_dt: "2026-06-03"
+              start_dt: "2026-06-03",
+              primary_contact_name: "",
+              primary_contact_email: "",
+              primary_contact_tel: "",
+              primary_contact_tel_office: ""
             },
             {
               id: 3,
@@ -56,7 +64,11 @@ describe("ATS React workspace", () => {
               renewalDays: 12,
               hasCostSheet: true,
               is_active: true,
-              start_dt: "2026-06-04"
+              start_dt: "2026-06-04",
+              primary_contact_name: "Pim",
+              primary_contact_email: "",
+              primary_contact_tel: "0899999999",
+              primary_contact_tel_office: ""
             }
           ]))
         });
@@ -112,7 +124,7 @@ describe("ATS React workspace", () => {
     // Wait for the data to load
     await screen.findByText("Apex Manufacturing");
 
-    expect(screen.getByRole("heading", { name: /customer workspace/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /customer manage/i })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: /primary navigation/i })).toHaveTextContent("Master Data");
     expect(screen.getByRole("navigation", { name: /primary navigation/i })).not.toHaveTextContent("Cost Sheet");
     expect(screen.getByRole("navigation", { name: /primary navigation/i })).not.toHaveTextContent("Booking");
@@ -313,20 +325,20 @@ describe("ATS React workspace", () => {
     expect(screen.getByRole("combobox", { name: /filter by missing field/i })).toBeInTheDocument();
 
     // 2. Verify status badge is displayed in each row
-    // Since Apex Manufacturing is incomplete (lacks phone), it should have an "Incomplete" badge
+    // Since Apex Manufacturing is incomplete (lacks office tel), it should have an "Incomplete" badge
     const rows = screen.getAllByRole("row");
     const apexRow = rows.find(r => r.textContent?.includes("Apex Manufacturing"));
     expect(apexRow).toBeDefined();
-    expect(within(apexRow!).getByText("Incomplete")).toBeInTheDocument();
+    const incompleteBadge = within(apexRow!).getByRole("button", { name: /show missing fields for apex manufacturing/i });
+    expect(incompleteBadge).toHaveTextContent("Incomplete");
 
-    // 3. Click the Info button for Apex Manufacturing and verify popover opens
-    const infoButton = within(apexRow!).getByRole("button", { name: /show missing fields for apex manufacturing/i });
-    expect(infoButton).toBeInTheDocument();
-    await user.click(infoButton);
+    // 3. Click the incomplete badge for Apex Manufacturing and verify popover opens
+    await user.click(incompleteBadge);
 
     // Verify popover displays missing fields
     expect(screen.getByRole("heading", { name: /missing fields/i })).toBeInTheDocument();
-    expect(screen.getByText("Phone")).toBeInTheDocument();
+    expect(screen.getByText("Office Tel")).toBeInTheDocument();
+    expect(screen.queryByText("Phone")).not.toBeInTheDocument();
     expect(screen.queryByText("Address")).not.toBeInTheDocument();
 
     // 4. Click the "Complete" filter pill

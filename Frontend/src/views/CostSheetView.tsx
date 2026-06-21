@@ -247,7 +247,7 @@ export const CostSheetView: React.FC<CostSheetViewProps> = ({ userRole, showToas
                       <th style={{ width: "15%" }}>Net Amount</th>
                       <th style={{ width: "10%" }}>GP %</th>
                       <th style={{ width: "10%" }}>Status</th>
-                      <th style={{ width: "10%" }}>&nbsp;</th>
+                      <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>

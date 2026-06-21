@@ -282,7 +282,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                     <th style={{ width: "20%" }}>Type</th>
                     <th style={{ width: "25%" }}>Item</th>
                     <th style={{ width: "20%" }}>Edition</th>
-                    <th style={{ width: "10%" }}>&nbsp;</th>
+                    <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
                   </tr>
                 )}
                 {tableType === "antiviruspricelist" && (
@@ -295,7 +295,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                     <th style={{ width: "10%" }}>End</th>
                     <th style={{ width: "15%" }}>Cost</th>
                     <th style={{ width: "10%" }}>Type</th>
-                    <th style={{ width: "10%" }}>&nbsp;</th>
+                    <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
                   </tr>
                 )}
                 {tableType === "products" && (
@@ -306,7 +306,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                     <th style={{ width: "30%" }}>Name</th>
                     <th style={{ width: "10%" }}>Cost</th>
                     <th style={{ width: "10%" }}>Price</th>
-                    <th style={{ width: "10%" }}>&nbsp;</th>
+                    <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
                   </tr>
                 )}
                 {tableType === "brands" && (
@@ -314,21 +314,21 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                     <th style={{ width: "10%" }}>ID</th>
                     <th style={{ width: "50%" }}>Brand Name</th>
                     <th style={{ width: "30%" }}>Code</th>
-                    <th style={{ width: "10%" }}>&nbsp;</th>
+                    <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
                   </tr>
                 )}
                 {tableType === "businesstypes" && (
                   <tr>
                     <th style={{ width: "10%" }}>ID</th>
                     <th style={{ width: "80%" }}>Business Type Detail</th>
-                    <th style={{ width: "10%" }}>&nbsp;</th>
+                    <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
                   </tr>
                 )}
                 {tableType === "categories" && (
                   <tr>
                     <th style={{ width: "10%" }}>ID</th>
                     <th style={{ width: "80%" }}>Category Name</th>
-                    <th style={{ width: "10%" }}>&nbsp;</th>
+                    <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
                   </tr>
                 )}
                 {tableType === "users" && (
@@ -349,7 +349,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                     <th style={{ width: "15%" }}>Year</th>
                     <th style={{ width: "20%" }}>Amount</th>
                     <th style={{ width: "15%" }}>Compare</th>
-                    <th style={{ width: "10%" }}>&nbsp;</th>
+                    <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
                   </tr>
                 )}
               </thead>

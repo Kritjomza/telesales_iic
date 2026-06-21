@@ -1,11 +1,8 @@
 import { useState, useEffect } from "react";
 import { apiService, setUnauthorizedCallback, setForbiddenCallback } from "./domain/apiService";
 import {
-  BarChart3,
   BookOpen,
-  LayoutDashboard,
   LogOut,
-  Search,
   Table2,
   Users,
   Building2,
@@ -162,8 +159,8 @@ function App() {
           alignItems: "center",
           justifyContent: "center",
           minHeight: "100vh",
-          background: "#f8fafc",
-          color: "var(--text-muted)",
+          background: "linear-gradient(135deg, #020617 0%, #071426 46%, #0a2a52 100%)",
+          color: "#d7eaff",
           fontFamily: "var(--font-family)",
           fontSize: "14px"
         }}
@@ -187,11 +184,11 @@ function App() {
     <div className="app-shell">
       {/* Sidebar Navigation */}
       <aside className="sidebar">
-        <a className="brand" href="/" onClick={(e) => { e.preventDefault(); setCurrentView("manage"); }} aria-label="ATS Home">
-          <span className="brand-mark">ATS</span>
+        <a className="brand" href="/" onClick={(e) => { e.preventDefault(); setCurrentView("manage"); }} aria-label="IIC Telesales home">
+          <span className="brand-mark">IIC</span>
           <span>
-            <strong>ATS</strong>
-            <small>Sale Management</small>
+            <strong>IIC Telesales</strong>
+            <small>Modernization Console</small>
           </span>
         </a>
 
@@ -210,11 +207,16 @@ function App() {
             .filter((group) => canAccessGroup(group.label, currentUser.roles))
             .map((group) => {
               const Icon = group.icon;
+              const groupActive = group.items.some((item) => {
+                const viewKey = group.label === "Master Data" ? "master-data" : item.key;
+                return Boolean(isChildSelected(item.name, viewKey));
+              });
               return (
                 <section className="nav-group" key={group.label}>
                   <button
-                    className="nav-parent"
+                    className={`nav-parent ${groupActive ? "active" : ""}`}
                     type="button"
+                    aria-current={groupActive ? "page" : undefined}
                   >
                     <Icon size={17} />
                     <span>{group.label}</span>

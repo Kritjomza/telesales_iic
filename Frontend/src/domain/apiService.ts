@@ -137,6 +137,8 @@ export const apiService = {
     businessType?: string;
     saleId?: string;
     telesaleId?: string;
+    completeness?: string;
+    missingField?: string;
   }): Promise<PaginatedResponse<Customer>> {
     const searchParams = new URLSearchParams();
     searchParams.append("page", params.page.toString());
@@ -148,8 +150,10 @@ export const apiService = {
       }
     }
     if (params.businessType) searchParams.append("businessType", params.businessType);
-    if (params.saleId) searchParams.append("saleId", params.saleId);
-    if (params.telesaleId) searchParams.append("telesaleId", params.telesaleId);
+    if (params.saleId && params.saleId !== "all") searchParams.append("saleId", params.saleId);
+    if (params.telesaleId && params.telesaleId !== "all") searchParams.append("telesaleId", params.telesaleId);
+    if (params.completeness && params.completeness !== "all") searchParams.append("completeness", params.completeness);
+    if (params.missingField && params.missingField !== "all") searchParams.append("missingField", params.missingField);
 
     const res = await request<any>(`/customers?${searchParams.toString()}`);
     if (res && Array.isArray(res)) {

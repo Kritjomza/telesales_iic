@@ -15,11 +15,12 @@ type Permission =
   | "customerManage"
   | "booking"
   | "reports"
-  | "costSheet";
+  | "costSheet"
+  | "admin";
 
 const rolePermissions: Record<Exclude<CanonicalRole, "">, Permission[]> = {
-  "Super Admin": ["masterData", "customerManage", "reports"],
-  Admin: ["masterData", "customerManage", "reports"],
+  "Super Admin": ["masterData", "customerManage", "reports", "admin"],
+  Admin: ["masterData", "customerManage", "reports", "admin"],
   Manager: ["customerManage", "reports"],
   Supervisor: ["customerManage", "reports"],
   Sale: ["customerManage"],
@@ -31,7 +32,8 @@ const groupPermissions: Record<string, Permission> = {
   "Master Data": "masterData",
   Customer: "customerManage",
   Report: "reports",
-  "Sale Manager": "costSheet"
+  "Sale Manager": "costSheet",
+  Admin: "admin"
 };
 
 const viewPermissions: Record<string, Permission | "public"> = {
@@ -40,7 +42,9 @@ const viewPermissions: Record<string, Permission | "public"> = {
   manage: "customerManage",
   booking: "booking",
   reports: "reports",
-  "cost-sheet": "costSheet"
+  "cost-sheet": "costSheet",
+  "import-customers": "admin",
+  "import-history": "admin"
 };
 
 export function normalizeRole(role?: string | null): CanonicalRole {

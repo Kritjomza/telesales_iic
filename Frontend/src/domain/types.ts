@@ -33,6 +33,7 @@ export interface Customer {
   primary_contact_name?: string | null;
   primary_contact_tel?: string | null;
   primary_contact_email?: string | null;
+  primary_contact_tel_office?: string | null;
   hasProductLicenseInfo?: boolean;
   matchedField?: string | null;
 }
@@ -43,7 +44,7 @@ export interface ContactDetail {
   contact_name: string;
   contact_email: string;
   contact_tel: string;
-  contact_tel_office?: string;
+  contact_tel_office?: string | null;
   point: number;
   total_point: number;
 }

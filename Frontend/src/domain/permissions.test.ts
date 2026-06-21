@@ -12,6 +12,8 @@ describe("role permissions", () => {
     expect(canAccessGroup("Master Data", "Super Admin")).toBe(true);
     expect(canAccessGroup("Customer", "Super Admin")).toBe(true);
     expect(canAccessGroup("Report", "Super Admin")).toBe(true);
+    expect(canAccessGroup("Admin", "Super Admin")).toBe(true);
+    expect(canAccessView("import-customers", "Super Admin")).toBe(true);
     expect(canAccessGroup("Sale Manager", "Super Admin")).toBe(false);
   });
 

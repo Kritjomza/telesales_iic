@@ -704,14 +704,30 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
       <header className="topbar">
         <div>
           <p>Admin / Import Data</p>
-          <h1>Smart Import System</h1>
+          <h1>Import Data</h1>
         </div>
       </header>
 
       <main className="content animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+        <section className="import-step-grid" aria-label="Import workflow steps">
+          {[
+            ["1", "Upload", "CSV or XLSX source"],
+            ["2", "Preview", "Map detected columns"],
+            ["3", "Validation", "Scan duplicates and errors"],
+            ["4", "Confirm", "Commit approved rows"]
+          ].map(([index, title, detail]) => (
+            <div className="import-step" key={index}>
+              <span className="import-step-index">{index}</span>
+              <div>
+                <strong>{title}</strong>
+                <span>{detail}</span>
+              </div>
+            </div>
+          ))}
+        </section>
         
         {/* Step 1: Upload File & AI Extraction Panels */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: "24px" }}>
+        <div className="import-panel-grid">
           
           {/* File Upload Panel */}
           <div className="panel panel-padded" style={{ display: "flex", flexDirection: "column" }}>
@@ -722,18 +738,12 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
 
             <div style={{ display: "flex", flexDirection: "column", gap: "16px", flexGrow: 1 }}>
               <div
+                className={`drop-zone ${isDragOver ? "drag-over" : ""}`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={triggerFileSelect}
                 style={{
-                  border: isDragOver ? "2px dashed var(--primary-color)" : "2px dashed var(--border-color)",
-                  borderRadius: "var(--border-radius)",
-                  padding: "30px 16px",
-                  textAlign: "center",
-                  cursor: "pointer",
-                  background: isDragOver ? "rgba(var(--primary-color-rgb), 0.04)" : "transparent",
-                  transition: "all 0.2s ease",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
@@ -839,7 +849,7 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
                 disabled={!unstructuredText.trim() || isExtracting}
                 type="button"
                 style={{
-                  background: "linear-gradient(135deg, var(--primary-color) 0%, #7c3aed 100%)",
+                  background: "var(--primary-color)",
                   border: "none",
                   display: "flex",
                   alignItems: "center",
@@ -1622,7 +1632,7 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
                         {hasValidated && suggestedCallAngle && (
                           <tr style={{ background: rowBg }}>
                             <td colSpan={hasValidated ? 13 : 11} style={{ padding: "4px 16px 8px 16px", borderTop: "none" }}>
-                              <div style={{ display: "flex", gap: "10px", background: "rgba(59, 130, 246, 0.03)", borderLeft: "3px solid var(--primary-color)", padding: "8px 12px", borderRadius: "0 4px 4px 0", fontSize: "12px" }}>
+                              <div style={{ display: "flex", gap: "10px", background: "rgba(59, 130, 246, 0.05)", border: "1px solid rgba(0, 91, 187, 0.22)", padding: "8px 12px", borderRadius: "4px", fontSize: "12px" }}>
                                 <span style={{ fontWeight: "700", color: "var(--primary-color)" }}>Telesales Tip:</span>
                                 <span style={{ color: "var(--text-color)", flex: 1 }}>{suggestedCallAngle}</span>
                                 <span style={{ fontSize: "11px", background: "var(--bg-active)", padding: "2px 6px", borderRadius: "10px", color: "var(--text-muted)" }}>Priority: <strong style={{ color: suggestedPriority === "High" ? "#dc2626" : suggestedPriority === "Low" ? "#16a34a" : "#ca8a04" }}>{suggestedPriority}</strong></span>
@@ -1724,7 +1734,7 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
           alignItems: "center",
           justifyContent: "center",
           zIndex: 1000,
-          backdropFilter: "blur(4px)"
+          backdropFilter: "none"
         }}>
           <div className="panel panel-padded" style={{ width: "400px", background: "var(--bg-card)", borderRadius: "var(--border-radius)", display: "flex", flexDirection: "column", gap: "16px", textAlign: "center" }}>
             <h2>Importing Customers...</h2>
@@ -1773,7 +1783,7 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
           alignItems: "center",
           justifyContent: "center",
           zIndex: 999,
-          backdropFilter: "blur(2px)"
+          backdropFilter: "none"
         }}>
           <div className="panel panel-padded" style={{ width: "450px", background: "var(--bg-card)", borderRadius: "var(--border-radius)", display: "flex", flexDirection: "column", gap: "16px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "10px" }}>

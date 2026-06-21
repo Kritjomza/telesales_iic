@@ -30,7 +30,10 @@ public class CustomersController : ControllerBase
         [FromQuery] string? search,
         [FromQuery] string? completeness,
         [FromQuery] string? missingField,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] string? businessType = null,
+        [FromQuery] int? saleId = null,
+        [FromQuery] int? telesaleId = null)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
 
@@ -40,6 +43,19 @@ public class CustomersController : ControllerBase
         if (!User.CanReadManagementData()) return Forbid();
 
         IQueryable<customer> query = _db.customers.ApplyCustomerScope(User, _db);
+
+        if (!string.IsNullOrEmpty(businessType))
+        {
+            query = query.Where(c => _db.business_types.Any(bt => bt.id == c.business_type_id && bt.type == businessType));
+        }
+        if (saleId.HasValue && saleId.Value > 0)
+        {
+            query = query.Where(c => c.sale_id == saleId.Value);
+        }
+        if (telesaleId.HasValue && telesaleId.Value > 0)
+        {
+            query = query.Where(c => c.telesale_id == telesaleId.Value);
+        }
 
         var searchTerm = CustomerSearch.NormalizeMultiToken(search);
         if (searchTerm != null)
@@ -88,6 +104,7 @@ public class CustomersController : ControllerBase
                     primary_contact_name = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault(),
                     primary_contact_tel = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault(),
                     primary_contact_email = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault(),
+                    primary_contact_tel_office = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel_office).FirstOrDefault(),
                     hasProductLicenseInfo = _db.details.Any(d => d.cust_id == c.id && _db.detail_devices.Any(dd => dd.dtl_id == d.id))
                 })
                 .ToListAsync(cancellationToken);
@@ -117,6 +134,7 @@ public class CustomersController : ControllerBase
                 primary_contact_name = c.primary_contact_name,
                 primary_contact_tel = c.primary_contact_tel,
                 primary_contact_email = c.primary_contact_email,
+                primary_contact_tel_office = c.primary_contact_tel_office,
                 hasProductLicenseInfo = c.hasProductLicenseInfo
             }).ToList();
 
@@ -160,6 +178,7 @@ public class CustomersController : ControllerBase
                     primary_contact_name = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault(),
                     primary_contact_tel = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault(),
                     primary_contact_email = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault(),
+                    primary_contact_tel_office = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel_office).FirstOrDefault(),
                     hasProductLicenseInfo = _db.details.Any(d => d.cust_id == c.id && _db.detail_devices.Any(dd => dd.dtl_id == d.id))
                 })
                 .ToListAsync(cancellationToken);
@@ -189,6 +208,7 @@ public class CustomersController : ControllerBase
                 primary_contact_name = c.primary_contact_name,
                 primary_contact_tel = c.primary_contact_tel,
                 primary_contact_email = c.primary_contact_email,
+                primary_contact_tel_office = c.primary_contact_tel_office,
                 hasProductLicenseInfo = c.hasProductLicenseInfo
             }).ToList();
 
@@ -240,7 +260,8 @@ public class CustomersController : ControllerBase
                 d.cust_id,
                 d.contact_name,
                 d.contact_tel,
-                d.contact_email
+                d.contact_email,
+                d.contact_tel_office
             })
             .ToListAsync(cancellationToken);
 
@@ -374,7 +395,8 @@ public class CustomersController : ControllerBase
                 d.cust_id,
                 d.contact_name,
                 d.contact_tel,
-                d.contact_email
+                d.contact_email,
+                d.contact_tel_office
             })
             .ToListAsync(cancellationToken);
         var primaryContactsByCustomerId = contactRows
@@ -421,6 +443,7 @@ public class CustomersController : ControllerBase
                 PrimaryContactName = primaryContact?.contact_name,
                 PrimaryContactTel = primaryContact?.contact_tel,
                 PrimaryContactEmail = primaryContact?.contact_email,
+                PrimaryContactTelOffice = primaryContact?.contact_tel_office,
                 HasProductLicenseInfo = productInfoSet.Contains(c.id)
             };
         }).ToList();
@@ -475,6 +498,7 @@ public class CustomersController : ControllerBase
             primary_contact_name = row.PrimaryContactName,
             primary_contact_tel = row.PrimaryContactTel,
             primary_contact_email = row.PrimaryContactEmail,
+            primary_contact_tel_office = row.PrimaryContactTelOffice,
             hasProductLicenseInfo = row.HasProductLicenseInfo,
             matchedField = matchedField
         };
@@ -490,6 +514,7 @@ public class CustomersController : ControllerBase
         public string? PrimaryContactName { get; set; }
         public string? PrimaryContactTel { get; set; }
         public string? PrimaryContactEmail { get; set; }
+        public string? PrimaryContactTelOffice { get; set; }
         public bool HasProductLicenseInfo { get; set; }
     }
 
@@ -1226,7 +1251,7 @@ public class CustomersController : ControllerBase
             primary_contact_name = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault(),
             primary_contact_tel = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault(),
             primary_contact_email = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault(),
-            hasProductLicenseInfo = _db.details.Any(d => d.cust_id == c.id && _db.detail_devices.Any(dd => dd.dtl_id == d.id))
+            primary_contact_tel_office = _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel_office).FirstOrDefault()
         }).ToListAsync(cancellationToken);
 
         var total = allCustomers.Count;
@@ -1236,14 +1261,12 @@ public class CustomersController : ControllerBase
 
         foreach (var c in allCustomers)
         {
-            bool hasPhone = !string.IsNullOrWhiteSpace(c.phone) || !string.IsNullOrWhiteSpace(c.primary_contact_tel);
             bool hasContact = !string.IsNullOrWhiteSpace(c.primary_contact_name);
-            bool hasBusinessType = c.business_type_id != null && c.business_type_id > 0;
-            bool hasAddress = !string.IsNullOrWhiteSpace(c.address);
             bool hasEmail = !string.IsNullOrWhiteSpace(c.primary_contact_email);
-            bool hasLicense = c.hasProductLicenseInfo;
+            bool hasPhone = !string.IsNullOrWhiteSpace(c.primary_contact_tel);
+            bool hasOfficePhone = !string.IsNullOrWhiteSpace(c.primary_contact_tel_office);
 
-            bool isComplete = hasPhone && hasContact && hasBusinessType && hasAddress && hasEmail && hasLicense;
+            bool isComplete = hasContact && hasEmail && hasPhone && hasOfficePhone;
             if (isComplete) completeCount++;
             else incompleteCount++;
 
@@ -1282,35 +1305,27 @@ public class CustomersController : ControllerBase
             if (completeness.Equals("complete", StringComparison.OrdinalIgnoreCase))
             {
                 query = query.Where(c =>
-                    // hasPhone
-                    ((c.phone != null && c.phone.Trim() != "") || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() != null && _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() != "") &&
-                    // hasContact
+                    // hasContactName
                     (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault() != null && _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault() != "") &&
-                    // hasBusinessType
-                    (c.business_type_id != null && c.business_type_id > 0) &&
-                    // hasAddress
-                    (c.address != null && c.address.Trim() != "") &&
-                    // hasEmail
+                    // hasContactEmail
                     (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault() != null && _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault() != "") &&
-                    // hasLicense
-                    (_db.details.Any(d => d.cust_id == c.id && _db.detail_devices.Any(dd => dd.dtl_id == d.id)))
+                    // hasContactTel
+                    (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() != null && _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() != "") &&
+                    // hasContactTelOffice
+                    (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel_office).FirstOrDefault() != null && _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel_office).FirstOrDefault() != "")
                 );
             }
             else if (completeness.Equals("incomplete", StringComparison.OrdinalIgnoreCase))
             {
                 query = query.Where(c =>
-                    // !hasPhone
-                    ((c.phone == null || c.phone.Trim() == "") && (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() == "")) ||
-                    // !hasContact
+                    // !hasContactName
                     (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault() == "") ||
-                    // !hasBusinessType
-                    (c.business_type_id == null || c.business_type_id <= 0) ||
-                    // !hasAddress
-                    (c.address == null || c.address.Trim() == "") ||
-                    // !hasEmail
+                    // !hasContactEmail
                     (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault() == "") ||
-                    // !hasLicense
-                    (!_db.details.Any(d => d.cust_id == c.id && _db.detail_devices.Any(dd => dd.dtl_id == d.id)))
+                    // !hasContactTel
+                    (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() == "") ||
+                    // !hasContactTelOffice
+                    (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel_office).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel_office).FirstOrDefault() == "")
                 );
             }
         }
@@ -1320,7 +1335,7 @@ public class CustomersController : ControllerBase
             if (missingField.Equals("noPhone", StringComparison.OrdinalIgnoreCase))
             {
                 query = query.Where(c =>
-                    (c.phone == null || c.phone.Trim() == "") && (_db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() == "")
+                    _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel).FirstOrDefault() == ""
                 );
             }
             else if (missingField.Equals("noContact", StringComparison.OrdinalIgnoreCase))
@@ -1331,15 +1346,11 @@ public class CustomersController : ControllerBase
             }
             else if (missingField.Equals("noBusinessType", StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(c =>
-                    c.business_type_id == null || c.business_type_id <= 0
-                );
+                return query;
             }
             else if (missingField.Equals("noAddress", StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(c =>
-                    c.address == null || c.address.Trim() == ""
-                );
+                return query;
             }
             else if (missingField.Equals("noEmail", StringComparison.OrdinalIgnoreCase))
             {
@@ -1349,8 +1360,12 @@ public class CustomersController : ControllerBase
             }
             else if (missingField.Equals("noProductLicense", StringComparison.OrdinalIgnoreCase))
             {
+                return query;
+            }
+            else if (missingField.Equals("noOfficePhone", StringComparison.OrdinalIgnoreCase))
+            {
                 query = query.Where(c =>
-                    !_db.details.Any(d => d.cust_id == c.id && _db.detail_devices.Any(dd => dd.dtl_id == d.id))
+                    _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel_office).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_tel_office).FirstOrDefault() == ""
                 );
             }
         }
@@ -1443,6 +1458,7 @@ public class CustomersController : ControllerBase
             primary_contact_name = primaryContact?.contact_name,
             primary_contact_tel = primaryContact?.contact_tel,
             primary_contact_email = primaryContact?.contact_email,
+            primary_contact_tel_office = primaryContact?.contact_tel_office,
             hasProductLicenseInfo = hasProductLicenseInfo
         };
     }

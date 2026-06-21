@@ -3,6 +3,7 @@ import type { Customer } from "./types";
 export type MissingField =
   | "phone"
   | "contact"
+  | "officePhone"
   | "businessType"
   | "address"
   | "subdistrict"
@@ -18,6 +19,7 @@ export type CustomerQuickFilter =
   | "complete"
   | "noPhone"
   | "noContact"
+  | "noOfficePhone"
   | "noBusinessType"
   | "noAddress"
   | "noEmail"
@@ -26,6 +28,7 @@ export type CustomerQuickFilter =
 export const missingFieldLabels: Record<MissingField, string> = {
   phone: "Phone",
   contact: "Contact",
+  officePhone: "Office Tel",
   businessType: "Business Type",
   address: "Address",
   subdistrict: "Subdistrict",
@@ -50,28 +53,20 @@ export const hasProductLicenseCompletenessData = (customers: Customer[]): boolea
 export const getCustomerMissingFields = (customer: Customer): MissingField[] => {
   const missing: MissingField[] = [];
 
-  if (!hasValue(customer.phone) && !hasValue(customer.primary_contact_tel)) {
-    missing.push("phone");
-  }
-
   if (responseHasField(customer, "primary_contact_name") && !hasValue(customer.primary_contact_name)) {
     missing.push("contact");
-  }
-
-  if (!hasValue(customer.bt_type) && !hasValue((customer as Customer & { businessTypeName?: unknown }).businessTypeName)) {
-    missing.push("businessType");
-  }
-
-  if (!hasValue(customer.address)) {
-    missing.push("address");
   }
 
   if (responseHasField(customer, "primary_contact_email") && !hasValue(customer.primary_contact_email)) {
     missing.push("email");
   }
 
-  if (typeof customer.hasProductLicenseInfo === "boolean" && !customer.hasProductLicenseInfo) {
-    missing.push("productLicense");
+  if (responseHasField(customer, "primary_contact_tel") && !hasValue(customer.primary_contact_tel)) {
+    missing.push("phone");
+  }
+
+  if (responseHasField(customer, "primary_contact_tel_office") && !hasValue(customer.primary_contact_tel_office)) {
+    missing.push("officePhone");
   }
 
   return missing;
@@ -86,6 +81,7 @@ export const customerMatchesQuickFilter = (customer: Customer, filter: CustomerQ
   if (filter === "incomplete") return missingFields.length > 0;
   if (filter === "noPhone") return missingFields.includes("phone");
   if (filter === "noContact") return missingFields.includes("contact");
+  if (filter === "noOfficePhone") return missingFields.includes("officePhone");
   if (filter === "noBusinessType") return missingFields.includes("businessType");
   if (filter === "noAddress") return missingFields.includes("address");
   if (filter === "noEmail") return missingFields.includes("email");

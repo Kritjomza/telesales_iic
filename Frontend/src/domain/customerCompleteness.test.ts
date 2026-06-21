@@ -28,10 +28,11 @@ const baseCustomer = {
   primary_contact_name: "Suda",
   primary_contact_email: "suda@example.com",
   primary_contact_tel: "0812345678",
+  primary_contact_tel_office: "021234567",
   hasProductLicenseInfo: true
-} satisfies Customer;
+} satisfies Customer & { primary_contact_tel_office?: string | null };
 
-const customer = (overrides: Partial<Customer> = {}): Customer => ({
+const customer = (overrides: Partial<Customer> & { primary_contact_tel_office?: string | null } = {}): Customer => ({
   ...baseCustomer,
   ...overrides
 });
@@ -41,53 +42,63 @@ describe("getCustomerMissingFields", () => {
     expect(getCustomerMissingFields(customer())).toEqual([]);
   });
 
-  it("marks phone missing only when company and primary contact phones are empty", () => {
-    expect(getCustomerMissingFields(customer({ phone: "", primary_contact_tel: "" }))).toContain("phone");
-    expect(getCustomerMissingFields(customer({ phone: "", primary_contact_tel: "0812345678" }))).not.toContain("phone");
+  it("checks only primary contact name, email, mobile tel, and office tel", () => {
+    expect(
+      getCustomerMissingFields(
+        customer({
+          phone: "",
+          bt_type: "",
+          address: "",
+          hasProductLicenseInfo: false
+        })
+      )
+    ).toEqual([]);
   });
 
-  it("detects missing contact, business type, address, email, and product license data", () => {
+  it("detects missing primary contact name, email, mobile tel, and office tel", () => {
     expect(
       getCustomerMissingFields(
         customer({
           primary_contact_name: "",
-          bt_type: "",
-          address: "   ",
           primary_contact_email: null,
-          hasProductLicenseInfo: false
+          primary_contact_tel: " ",
+          primary_contact_tel_office: ""
         })
       )
     ).toEqual([
       "contact",
-      "businessType",
-      "address",
       "email",
-      "productLicense"
+      "phone",
+      "officePhone"
     ]);
-  });
-
-  it("only treats missing main address as no address for quick filtering", () => {
-    expect(customerMatchesQuickFilter(customer({ address: "" }), "noAddress")).toBe(true);
-    expect(customerMatchesQuickFilter(customer({ address: "Bangkok", subdistrict: "" }), "noAddress")).toBe(false);
-    expect(customerMatchesQuickFilter(customer({ address: "Bangkok", district: "" }), "noAddress")).toBe(false);
-    expect(customerMatchesQuickFilter(customer({ address: "Bangkok", province: "" }), "noAddress")).toBe(false);
-    expect(customerMatchesQuickFilter(customer({ address: "Bangkok", postal_code: "" }), "noAddress")).toBe(false);
-  });
-
-  it("does not require product license data when the response omits that capability", () => {
-    const { hasProductLicenseInfo: _ignored, ...withoutProductFlag } = customer();
-
-    expect(getCustomerMissingFields(withoutProductFlag)).not.toContain("productLicense");
   });
 });
 
 describe("customer quick filters", () => {
-  it.each<CustomerQuickFilter>(["all", "complete", "incomplete", "noPhone", "noContact", "noBusinessType", "noAddress", "noEmail", "noProductLicense"])(
+  it.each<CustomerQuickFilter>(["all", "complete", "incomplete", "noPhone", "noContact", "noBusinessType", "noAddress", "noEmail", "noOfficePhone", "noProductLicense"])(
     "evaluates %s without throwing",
     (filter) => {
-      expect(typeof customerMatchesQuickFilter(customer({ phone: "", hasProductLicenseInfo: false }), filter)).toBe("boolean");
+      expect(typeof customerMatchesQuickFilter(customer({ primary_contact_tel: "", primary_contact_tel_office: "" }), filter)).toBe("boolean");
     }
   );
+
+  it("matches only contact-field filters for missing contact data", () => {
+    const missingContact = customer({
+      primary_contact_name: "",
+      primary_contact_email: "",
+      primary_contact_tel: "",
+      primary_contact_tel_office: ""
+    });
+
+    expect(customerMatchesQuickFilter(missingContact, "incomplete")).toBe(true);
+    expect(customerMatchesQuickFilter(missingContact, "noContact")).toBe(true);
+    expect(customerMatchesQuickFilter(missingContact, "noEmail")).toBe(true);
+    expect(customerMatchesQuickFilter(missingContact, "noPhone")).toBe(true);
+    expect(customerMatchesQuickFilter(missingContact, "noOfficePhone")).toBe(true);
+    expect(customerMatchesQuickFilter(customer({ address: "" }), "noAddress")).toBe(false);
+    expect(customerMatchesQuickFilter(customer({ bt_type: "" }), "noBusinessType")).toBe(false);
+    expect(customerMatchesQuickFilter(customer({ hasProductLicenseInfo: false }), "noProductLicense")).toBe(false);
+  });
 
   it("identifies whether product/license quick filtering can be shown for a result set", () => {
     expect(hasProductLicenseCompletenessData([customer()])).toBe(true);

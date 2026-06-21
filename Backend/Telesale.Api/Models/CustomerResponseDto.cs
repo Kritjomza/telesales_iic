@@ -27,6 +27,7 @@ public class CustomerResponseDto
     public string? primary_contact_name { get; set; }
     public string? primary_contact_tel { get; set; }
     public string? primary_contact_email { get; set; }
+    public string? primary_contact_tel_office { get; set; }
     public bool? hasProductLicenseInfo { get; set; }
     public string? matchedField { get; set; }
 }

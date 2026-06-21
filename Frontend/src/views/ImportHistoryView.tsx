@@ -95,7 +95,7 @@ export const ImportHistoryView: React.FC<ImportHistoryViewProps> = ({ userRole, 
                   <th style={{ width: "10%" }}>Imported</th>
                   <th style={{ width: "10%" }}>Skipped</th>
                   <th style={{ width: "10%" }}>Errors</th>
-                  <th style={{ width: "5%" }}>&nbsp;</th>
+                  <th style={{ width: "5%", textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,7 +177,7 @@ export const ImportHistoryView: React.FC<ImportHistoryViewProps> = ({ userRole, 
                         {isExpanded && hasErrors && (
                           <tr>
                             <td colSpan={9} style={{ padding: "12px 24px", background: "rgba(239, 68, 68, 0.02)", borderTop: "none" }}>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "8px", borderLeft: "3px solid #dc2626", paddingLeft: "16px" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "8px", border: "1px solid rgba(180, 35, 24, 0.22)", padding: "12px", borderRadius: "6px", background: "#fff" }}>
                                 <div style={{ fontWeight: "600", color: "#dc2626", fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}>
                                   <AlertCircle size={15} />
                                   Execution Errors & Rollback Context
