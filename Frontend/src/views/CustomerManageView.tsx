@@ -13,7 +13,6 @@ import { isAdminRole, isAgentRole, isSupervisorRole, canDeleteCustomer } from ".
 import { 
   customerMatchesQuickFilter, 
   getCustomerMissingFields, 
-  hasProductLicenseCompletenessData, 
   missingFieldLabels,
   type CustomerQuickFilter 
 } from "../domain/customerCompleteness";
@@ -701,25 +700,12 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   </button>
                 </div>
               </form>
-
-              <div 
-                className="completeness-filter-row" 
-                style={{ 
-                  display: "flex", 
-                  justifyContent: "space-between", 
-                  alignItems: "center", 
-                  marginTop: "12px", 
-                  paddingTop: "12px", 
-                  borderTop: "1px solid var(--border)",
-                  gap: "16px",
-                  flexWrap: "wrap"
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--text-muted)" }}>
+              <div className="completeness-filter-row">
+                <div className="completeness-filter-group">
+                  <span className="completeness-filter-label">
                     Completeness:
                   </span>
-                  <div style={{ display: "flex", gap: "6px" }}>
+                  <div className="completeness-filter-pills">
                     {[
                       { id: "all", label: "All" },
                       { id: "incomplete", label: "Incomplete" },
@@ -732,8 +718,10 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                         onClick={() => {
                           setCompletenessFilter(opt.id as any);
                           setPage(1);
+                          if (opt.id === "complete" || opt.id === "all") {
+                            setMissingFieldFilter("all");
+                          }
                         }}
-                        style={{ height: "26px", padding: "0 10px", borderRadius: "13px", fontSize: "11px" }}
                       >
                         {opt.label}
                       </button>
@@ -741,38 +729,28 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   </div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--text-muted)" }}>
+                <div className="completeness-filter-group">
+                  <span className="completeness-filter-label">
                     Missing Field Filter:
                   </span>
                   <select
                     value={missingFieldFilter}
                     onChange={(e) => {
-                      setMissingFieldFilter(e.target.value as any);
+                      const val = e.target.value as any;
+                      setMissingFieldFilter(val);
                       setPage(1);
+                      if (val !== "all") {
+                        setCompletenessFilter("incomplete");
+                      }
                     }}
                     aria-label="Filter by missing field"
-                    style={{ 
-                      height: "30px", 
-                      padding: "4px 8px", 
-                      borderRadius: "6px", 
-                      border: "1px solid var(--iic-border)", 
-                      fontSize: "12px", 
-                      background: "var(--iic-card)", 
-                      color: "var(--iic-text)",
-                      minWidth: "160px"
-                    }}
+                    className="missing-field-select"
                   >
                     <option value="all">All Fields</option>
                     <option value="noPhone">No Phone</option>
                     <option value="noContact">No Contact</option>
                     <option value="noOfficePhone">No Office Tel</option>
-                    <option value="noBusinessType">No Business Type</option>
-                    <option value="noAddress">No Address</option>
                     <option value="noEmail">No Email</option>
-                    {hasProductLicenseCompletenessData(customers) && (
-                      <option value="noProductLicense">No Product / License Info</option>
-                    )}
                   </select>
                 </div>
               </div>
@@ -782,13 +760,12 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                 <table className="corporate-table" aria-label="Customer records">
                   <thead>
                     <tr>
-                      <th style={{ width: "5%" }}>No.</th>
-                      <th style={{ width: "32%" }}>Name / Address</th>
+                      <th style={{ width: "4%" }}>No.</th>
+                      <th style={{ width: "34%" }}>Name / Address</th>
                       <th style={{ width: "12%" }}>Start Date</th>
-                      <th style={{ width: "10%" }}>Status</th>
-                      <th style={{ width: "15%" }}>Business</th>
-
-                      <th style={{ width: "14%", textAlign: "right" }}>Actions</th>
+                      <th style={{ width: "12%" }}>Status</th>
+                      <th style={{ width: "13%" }}>Business</th>
+                      <th style={{ width: "25%", textAlign: "right" }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -997,8 +974,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       <th style={{ width: "25%" }}>Name</th>
                       <th style={{ width: "25%" }}>Email</th>
                       <th style={{ width: "20%" }}>Tel / Tel Office</th>
-
-                      <th style={{ width: "15%" }}>&nbsp;</th>
+                      <th style={{ width: "25%", textAlign: "right" }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1122,11 +1098,10 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       <th style={{ width: "25%" }}>Device / Software</th>
                       <th style={{ width: "12%" }}>Desktop Qty</th>
                       <th style={{ width: "12%" }}>Server Qty</th>
-                      <th style={{ width: "15%" }}>Expire Date</th>
-
+                      <th style={{ width: "14%" }}>Expire Date</th>
                       <th style={{ width: "10%" }}>Status</th>
-                      <th style={{ width: "13%" }}>Competitor</th>
-                      <th style={{ width: "10%" }}>&nbsp;</th>
+                      <th style={{ width: "12%" }}>Competitor</th>
+                      <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1223,9 +1198,8 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       <th style={{ width: "5%" }}>No.</th>
                       <th style={{ width: "45%" }}>Project Detail</th>
                       <th style={{ width: "15%" }}>Close Date</th>
-
                       <th style={{ width: "15%" }}>Status</th>
-                      <th style={{ width: "10%" }}>&nbsp;</th>
+                      <th style={{ width: "20%", textAlign: "right" }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>

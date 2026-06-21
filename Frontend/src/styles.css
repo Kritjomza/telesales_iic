@@ -1361,6 +1361,63 @@ table.corporate-table tr.urgent-row {
   color: #fff;
 }
 
+/* Completeness Filter Row & Dropdown styling */
+.completeness-filter-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--iic-border);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.completeness-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.completeness-filter-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--iic-muted);
+}
+
+.completeness-filter-pills {
+  display: flex;
+  gap: 6px;
+}
+
+.completeness-filter-pills .filter-pill {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.missing-field-select {
+  height: 30px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--iic-border);
+  font-size: 12px;
+  background: var(--iic-card);
+  color: var(--iic-text);
+  min-width: 160px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.missing-field-select:focus {
+  border-color: var(--iic-blue);
+  box-shadow: var(--focus-ring);
+}
+
 .panel-header.split {
   display: flex;
   justify-content: space-between;

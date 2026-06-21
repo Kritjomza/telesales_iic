@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   customerMatchesQuickFilter,
   getCustomerMissingFields,
-  hasProductLicenseCompletenessData,
   type CustomerQuickFilter
 } from "./customerCompleteness";
 import type { Customer } from "./types";
@@ -42,7 +41,7 @@ describe("getCustomerMissingFields", () => {
     expect(getCustomerMissingFields(customer())).toEqual([]);
   });
 
-  it("checks only primary contact name, email, mobile tel, and office tel", () => {
+  it("does not check business type, address, or product license info", () => {
     expect(
       getCustomerMissingFields(
         customer({
@@ -75,7 +74,7 @@ describe("getCustomerMissingFields", () => {
 });
 
 describe("customer quick filters", () => {
-  it.each<CustomerQuickFilter>(["all", "complete", "incomplete", "noPhone", "noContact", "noBusinessType", "noAddress", "noEmail", "noOfficePhone", "noProductLicense"])(
+  it.each<CustomerQuickFilter>(["all", "complete", "incomplete", "noPhone", "noContact", "noEmail", "noOfficePhone"])(
     "evaluates %s without throwing",
     (filter) => {
       expect(typeof customerMatchesQuickFilter(customer({ primary_contact_tel: "", primary_contact_tel_office: "" }), filter)).toBe("boolean");
@@ -95,13 +94,5 @@ describe("customer quick filters", () => {
     expect(customerMatchesQuickFilter(missingContact, "noEmail")).toBe(true);
     expect(customerMatchesQuickFilter(missingContact, "noPhone")).toBe(true);
     expect(customerMatchesQuickFilter(missingContact, "noOfficePhone")).toBe(true);
-    expect(customerMatchesQuickFilter(customer({ address: "" }), "noAddress")).toBe(false);
-    expect(customerMatchesQuickFilter(customer({ bt_type: "" }), "noBusinessType")).toBe(false);
-    expect(customerMatchesQuickFilter(customer({ hasProductLicenseInfo: false }), "noProductLicense")).toBe(false);
-  });
-
-  it("identifies whether product/license quick filtering can be shown for a result set", () => {
-    expect(hasProductLicenseCompletenessData([customer()])).toBe(true);
-    expect(hasProductLicenseCompletenessData([customer({ hasProductLicenseInfo: undefined })])).toBe(false);
   });
 });

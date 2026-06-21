@@ -4,14 +4,7 @@ export type MissingField =
   | "phone"
   | "contact"
   | "officePhone"
-  | "businessType"
-  | "address"
-  | "subdistrict"
-  | "district"
-  | "province"
-  | "postalCode"
-  | "email"
-  | "productLicense";
+  | "email";
 
 export type CustomerQuickFilter =
   | "all"
@@ -20,23 +13,13 @@ export type CustomerQuickFilter =
   | "noPhone"
   | "noContact"
   | "noOfficePhone"
-  | "noBusinessType"
-  | "noAddress"
-  | "noEmail"
-  | "noProductLicense";
+  | "noEmail";
 
 export const missingFieldLabels: Record<MissingField, string> = {
   phone: "Phone",
   contact: "Contact",
   officePhone: "Office Tel",
-  businessType: "Business Type",
-  address: "Address",
-  subdistrict: "Subdistrict",
-  district: "District",
-  province: "Province",
-  postalCode: "Postal Code",
-  email: "Email",
-  productLicense: "Product / License"
+  email: "Email"
 };
 
 const hasValue = (value: unknown): boolean => {
@@ -46,9 +29,6 @@ const hasValue = (value: unknown): boolean => {
 
 const responseHasField = (customer: Customer, field: keyof Customer): boolean =>
   Object.prototype.hasOwnProperty.call(customer, field);
-
-export const hasProductLicenseCompletenessData = (customers: Customer[]): boolean =>
-  customers.some((customer) => typeof customer.hasProductLicenseInfo === "boolean");
 
 export const getCustomerMissingFields = (customer: Customer): MissingField[] => {
   const missing: MissingField[] = [];
@@ -82,10 +62,7 @@ export const customerMatchesQuickFilter = (customer: Customer, filter: CustomerQ
   if (filter === "noPhone") return missingFields.includes("phone");
   if (filter === "noContact") return missingFields.includes("contact");
   if (filter === "noOfficePhone") return missingFields.includes("officePhone");
-  if (filter === "noBusinessType") return missingFields.includes("businessType");
-  if (filter === "noAddress") return missingFields.includes("address");
   if (filter === "noEmail") return missingFields.includes("email");
-  if (filter === "noProductLicense") return missingFields.includes("productLicense");
 
   return true;
 };

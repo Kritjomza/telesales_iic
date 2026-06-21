@@ -1344,23 +1344,11 @@ public class CustomersController : ControllerBase
                     _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_name).FirstOrDefault() == ""
                 );
             }
-            else if (missingField.Equals("noBusinessType", StringComparison.OrdinalIgnoreCase))
-            {
-                return query;
-            }
-            else if (missingField.Equals("noAddress", StringComparison.OrdinalIgnoreCase))
-            {
-                return query;
-            }
             else if (missingField.Equals("noEmail", StringComparison.OrdinalIgnoreCase))
             {
                 query = query.Where(c =>
                     _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault() == null || _db.details.Where(d => d.cust_id == c.id).OrderBy(d => d.id).Select(d => d.contact_email).FirstOrDefault() == ""
                 );
-            }
-            else if (missingField.Equals("noProductLicense", StringComparison.OrdinalIgnoreCase))
-            {
-                return query;
             }
             else if (missingField.Equals("noOfficePhone", StringComparison.OrdinalIgnoreCase))
             {
