@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { 
-  Users, UserCheck, ShieldCheck, FileText, Search, Plus, 
+import {
+  Users, UserCheck, ShieldCheck, FileText, Search, Plus,
   FileDown, Pencil, Trash2, ArrowLeft, Laptop, Target, Check, AlertCircle, Info,
   FileSpreadsheet
 } from "lucide-react";
@@ -9,14 +9,20 @@ import { ImportMasterDataModal } from "../components/ImportMasterDataModal";
 import type { Customer, ContactDetail, DetailDevice, DetailProject, User, Category, Competitor } from "../domain/types";
 import { Drawer } from "../components/Drawer";
 
+import totalCustomersIcon from "../assets/total_customers.svg";
+import completeDataIcon from "../assets/complete_data.svg";
+import incompleteDataIcon from "../assets/incomplete_data.gif";
+import nearRenewalIcon from "../assets/near_renewal.svg";
+
+
 import { ForbiddenView } from "./ForbiddenView";
 import { Pagination } from "../components/Pagination";
 import { isAdminRole, isAgentRole, isSupervisorRole, canDeleteCustomer } from "../domain/permissions";
-import { 
-  customerMatchesQuickFilter, 
-  getCustomerMissingFields, 
+import {
+  customerMatchesQuickFilter,
+  getCustomerMissingFields,
   missingFieldLabels,
-  type CustomerQuickFilter 
+  type CustomerQuickFilter
 } from "../domain/customerCompleteness";
 
 interface CustomerManageViewProps {
@@ -24,7 +30,7 @@ interface CustomerManageViewProps {
   showToast: (msg: string, type: "success" | "error" | "info") => void;
 }
 
-type SubView = 
+type SubView =
   | { type: "list" }
   | { type: "advance-data"; customer: Customer }
   | { type: "devices"; contact: ContactDetail; customer: Customer }
@@ -282,7 +288,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
       list = list.filter(c => {
         const matchQuery = !appliedQuery || `${c.name} ${c.address}`.toLowerCase().includes(appliedQuery.toLowerCase());
         const matchBus = appliedBusinessType ? c.bt_type === appliedBusinessType : true;
-        
+
         return matchQuery && matchBus;
       });
     }
@@ -297,13 +303,13 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
 
     return list;
   }, [
-    customers, 
-    appliedQuery, 
-    appliedBusinessType, 
-    appliedSaleFilter, 
-    appliedTelesaleFilter, 
-    backendMetrics, 
-    completenessFilter, 
+    customers,
+    appliedQuery,
+    appliedBusinessType,
+    appliedSaleFilter,
+    appliedTelesaleFilter,
+    backendMetrics,
+    completenessFilter,
     missingFieldFilter
   ]);
 
@@ -492,7 +498,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         const refreshedDevices = await apiService.getDevices(contactId);
         setDevices(refreshedDevices);
         showToast("Device record deleted successfully", "success");
-        
+
         // Refresh parent contact points
         if (subView.type === "devices") {
           const refreshedContacts = await apiService.getContactDetails(subView.customer.id);
@@ -552,7 +558,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         const refreshedProjects = await apiService.getProjects(contactId);
         setProjects(refreshedProjects);
         showToast("Project record deleted successfully", "success");
-        
+
         // Refresh parent contact points
         if (subView.type === "projects") {
           const refreshedContacts = await apiService.getContactDetails(subView.customer.id);
@@ -612,31 +618,38 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
           </header>
 
           <main className="content animate-fade-in">
-            {/* Metrics */}
             <section className="metrics-grid" aria-label="Customer summary metrics">
               <div className="metric-card blue">
-                <div className="metric-icon"><Users size={18} /></div>
+                <div className="metric-icon">
+                  <img src={totalCustomersIcon} alt="Total Customers" className="metric-svg-total" />
+                </div>
                 <div>
                   <span>Total Customers</span>
                   <strong>{metrics.total}</strong>
                 </div>
               </div>
               <div className="metric-card teal">
-                <div className="metric-icon"><Check size={18} /></div>
+                <div className="metric-icon">
+                  <img src={completeDataIcon} alt="Complete Data" className="metric-svg-complete" />
+                </div>
                 <div>
                   <span>Complete Data</span>
                   <strong>{metrics.complete}</strong>
                 </div>
               </div>
               <div className="metric-card amber">
-                <div className="metric-icon"><AlertCircle size={18} /></div>
+                <div className="metric-icon">
+                  <img src={incompleteDataIcon} alt="Incomplete Data" className="metric-svg-incomplete" />
+                </div>
                 <div>
                   <span>Incomplete Data</span>
                   <strong>{metrics.incomplete}</strong>
                 </div>
               </div>
               <div className="metric-card red">
-                <div className="metric-icon"><ShieldCheck size={18} /></div>
+                <div className="metric-icon">
+                  <img src={nearRenewalIcon} alt="Near Renewal" className="metric-svg-renewal" />
+                </div>
                 <div>
                   <span>Near Renewal (30d)</span>
                   <strong>{metrics.nearRenewal}</strong>
@@ -649,9 +662,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
               <form className="filter-band" onSubmit={handleSearchSubmit}>
                 <label>
                   <span>Customer name or address</span>
-                  <input 
-                    type="text" 
-                    placeholder="Name, Address" 
+                  <input
+                    type="text"
+                    placeholder="Name, Address"
                     value={draftQuery}
                     onChange={(e) => setDraftQuery(e.target.value)}
                     aria-label="Customer name or address"
@@ -659,8 +672,8 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                 </label>
                 <label>
                   <span>Business type</span>
-                  <select 
-                    value={draftBusinessType} 
+                  <select
+                    value={draftBusinessType}
                     onChange={(e) => setDraftBusinessType(e.target.value)}
                     aria-label="Business type"
                   >
@@ -776,8 +789,8 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                           </td>
                           <td>
                             {(!c.is_active && isAdmin) ? (
-                              <button 
-                                className="danger-action-btn" 
+                              <button
+                                className="danger-action-btn"
                                 onClick={() => handleToggleCustomerActive(c)}
                                 type="button"
                               >
@@ -811,9 +824,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                                   </button>
                                 );
                               })()}
-                              
+
                               {openPopoverCustomerId === c.id && (
-                                <div 
+                                <div
                                   className="missing-fields-popover"
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -824,9 +837,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                                       return (
                                         <div className="missing-fields-list">
                                           {missingFields.map((field) => (
-                                            <span 
-                                              key={field} 
-                                              className="status-badge wait" 
+                                            <span
+                                              key={field}
+                                              className="status-badge wait"
                                             >
                                               {missingFieldLabels[field]}
                                             </span>
@@ -868,7 +881,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                                   Advance
                                 </button>
                               )}
-                              <button 
+                              <button
                                 className="edit-btn"
                                 onClick={() => { setActiveCustomer(c); setIsCustomerDrawerOpen(true); }}
                                 aria-label={`Edit ${c.name}`}
@@ -877,7 +890,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                                 <Pencil size={14} />
                               </button>
                               {canDeleteCustomer(userRole) && (
-                                <button 
+                                <button
                                   className="delete-btn"
                                   onClick={() => handleDeleteCustomer(c.id, c.name)}
                                   aria-label={`Delete ${c.name}`}
@@ -1040,8 +1053,8 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         <>
           <header className="topbar">
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <button 
-                className="icon-back-btn" 
+              <button
+                className="icon-back-btn"
                 onClick={async () => {
                   setIsLoading(true);
                   try {
@@ -1053,7 +1066,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   } finally {
                     setIsLoading(false);
                   }
-                }} 
+                }}
                 aria-label="Back to contact persons"
                 type="button"
               >
@@ -1141,8 +1154,8 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         <>
           <header className="topbar">
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <button 
-                className="icon-back-btn" 
+              <button
+                className="icon-back-btn"
                 onClick={async () => {
                   setIsLoading(true);
                   try {
@@ -1154,7 +1167,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   } finally {
                     setIsLoading(false);
                   }
-                }} 
+                }}
                 aria-label="Back to contact persons"
                 type="button"
               >
@@ -1202,11 +1215,11 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                               <button onClick={() => openProjectDrawer(item)} aria-label="Edit project" type="button">
                                 <Pencil size={13} />
                               </button>
-                               {userRole !== "Viewer" && (
+                              {userRole !== "Viewer" && (
                                 <button className="delete-btn" onClick={() => handleDeleteProject(item.id, subView.contact.id)} aria-label="Delete project" type="button">
                                   <Trash2 size={13} />
                                 </button>
-                               )}
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1237,32 +1250,32 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         <form onSubmit={handleSaveCustomer} className="corporate-form">
           <div className="form-group">
             <label htmlFor="name">Customer Name *</label>
-            <input 
+            <input
               id="name"
-              name="name" 
-              type="text" 
-              defaultValue={activeCustomer?.name || ""} 
-              required 
+              name="name"
+              type="text"
+              defaultValue={activeCustomer?.name || ""}
+              required
             />
           </div>
           <div className="form-group">
             <label htmlFor="address">Address *</label>
-            <textarea 
+            <textarea
               id="address"
-              name="address" 
-              rows={3} 
-              defaultValue={activeCustomer?.address || ""} 
-              required 
+              name="address"
+              rows={3}
+              defaultValue={activeCustomer?.address || ""}
+              required
             />
           </div>
           <div className="form-group">
             <label htmlFor="capital">Capital (THB)</label>
-            <input 
+            <input
               id="capital"
-              name="capital" 
-              type="text" 
-              defaultValue={activeCustomer?.capital || ""} 
-              placeholder="e.g. 5,000,000" 
+              name="capital"
+              type="text"
+              defaultValue={activeCustomer?.capital || ""}
+              placeholder="e.g. 5,000,000"
             />
           </div>
 
@@ -1270,10 +1283,10 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
             <legend>Metadata & Status</legend>
             <div className="form-group">
               <label htmlFor="bt_type">Business Type *</label>
-              <select 
+              <select
                 id="bt_type"
-                name="bt_type" 
-                defaultValue={activeCustomer?.bt_type || (businessTypes[0]?.name || "")} 
+                name="bt_type"
+                defaultValue={activeCustomer?.bt_type || (businessTypes[0]?.name || "")}
                 required
               >
                 {businessTypes.map(t => (
@@ -1284,18 +1297,18 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
             <div className="form-row">
               <div className="form-group">
                 <label htmlFor="start_dt">Start Date</label>
-                <input 
+                <input
                   id="start_dt"
-                  name="start_dt" 
-                  type="date" 
-                  defaultValue={activeCustomer?.start_dt || ""} 
+                  name="start_dt"
+                  type="date"
+                  defaultValue={activeCustomer?.start_dt || ""}
                 />
               </div>
               <div className="form-group">
                 <label htmlFor="status">Status</label>
-                <select 
+                <select
                   id="status"
-                  name="status" 
+                  name="status"
                   defaultValue={activeCustomer?.status || "New"}
                 >
                   <option value="New">New</option>
@@ -1311,12 +1324,12 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
             </div>
             <div className="form-group checkbox-group">
               <label className="checkbox-label" htmlFor="is_active">
-                <input 
+                <input
                   id="is_active"
-                  name="is_active" 
-                  type="checkbox" 
-                  value="true" 
-                  defaultChecked={activeCustomer ? activeCustomer.is_active : true} 
+                  name="is_active"
+                  type="checkbox"
+                  value="true"
+                  defaultChecked={activeCustomer ? activeCustomer.is_active : true}
                 />
                 <span>Active Customer (Enable)</span>
               </label>
@@ -1353,42 +1366,42 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
           <form onSubmit={(e) => handleSaveContact(e, subView.customer.id)} className="corporate-form">
             <div className="form-group">
               <label htmlFor="contact_name_person">Name *</label>
-              <input 
+              <input
                 id="contact_name_person"
-                name="contact_name" 
-                type="text" 
-                defaultValue={activeContact?.contact_name || ""} 
-                required 
+                name="contact_name"
+                type="text"
+                defaultValue={activeContact?.contact_name || ""}
+                required
               />
             </div>
             <div className="form-group">
               <label htmlFor="contact_email_person">Email *</label>
-              <input 
+              <input
                 id="contact_email_person"
-                name="contact_email" 
-                type="email" 
-                defaultValue={activeContact?.contact_email || ""} 
-                required 
+                name="contact_email"
+                type="email"
+                defaultValue={activeContact?.contact_email || ""}
+                required
               />
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label htmlFor="contact_tel_person">Mobile Tel *</label>
-                <input 
+                <input
                   id="contact_tel_person"
-                  name="contact_tel" 
-                  type="text" 
-                  defaultValue={activeContact?.contact_tel || ""} 
-                  required 
+                  name="contact_tel"
+                  type="text"
+                  defaultValue={activeContact?.contact_tel || ""}
+                  required
                 />
               </div>
               <div className="form-group">
                 <label htmlFor="contact_tel_office_person">Office Tel</label>
-                <input 
+                <input
                   id="contact_tel_office_person"
-                  name="contact_tel_office" 
-                  type="text" 
-                  defaultValue={activeContact?.contact_tel_office || ""} 
+                  name="contact_tel_office"
+                  type="text"
+                  defaultValue={activeContact?.contact_tel_office || ""}
                 />
               </div>
             </div>
@@ -1410,54 +1423,54 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
           <form onSubmit={(e) => handleSaveDevice(e, subView.contact.id)} className="corporate-form">
             <div className="form-group">
               <label htmlFor="full_name_dev">Software Name *</label>
-              <input 
+              <input
                 id="full_name_dev"
-                name="full_name" 
-                type="text" 
-                defaultValue={activeDevice?.full_name || ""} 
-                placeholder="e.g. Kaspersky Security" 
-                required 
+                name="full_name"
+                type="text"
+                defaultValue={activeDevice?.full_name || ""}
+                placeholder="e.g. Kaspersky Security"
+                required
               />
             </div>
             <div className="form-group">
               <label htmlFor="dtl_dev">Description</label>
-              <textarea 
+              <textarea
                 id="dtl_dev"
-                name="dtl" 
-                rows={2} 
-                defaultValue={activeDevice?.dtl || ""} 
+                name="dtl"
+                rows={2}
+                defaultValue={activeDevice?.dtl || ""}
               />
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label htmlFor="desktop_qty">Desktop Qty *</label>
-                <input 
+                <input
                   id="desktop_qty"
-                  name="desktop_qty" 
-                  type="number" 
-                  defaultValue={activeDevice ? activeDevice.desktop_qty : 0} 
-                  required 
+                  name="desktop_qty"
+                  type="number"
+                  defaultValue={activeDevice ? activeDevice.desktop_qty : 0}
+                  required
                 />
               </div>
               <div className="form-group">
                 <label htmlFor="server_qty">Server Qty *</label>
-                <input 
+                <input
                   id="server_qty"
-                  name="server_qty" 
-                  type="number" 
-                  defaultValue={activeDevice ? activeDevice.server_qty : 0} 
-                  required 
+                  name="server_qty"
+                  type="number"
+                  defaultValue={activeDevice ? activeDevice.server_qty : 0}
+                  required
                 />
               </div>
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label htmlFor="equipment_expire">Expire Date</label>
-                <input 
+                <input
                   id="equipment_expire"
-                  name="equipment_expire" 
-                  type="date" 
-                  defaultValue={activeDevice?.equipment_expire || ""} 
+                  name="equipment_expire"
+                  type="date"
+                  defaultValue={activeDevice?.equipment_expire || ""}
                 />
               </div>
               <input type="hidden" name="point" value="0" />
@@ -1465,9 +1478,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
             <div className="form-row">
               <div className="form-group">
                 <label htmlFor="progress_status_dev">Status</label>
-                <select 
+                <select
                   id="progress_status_dev"
-                  name="progress_status" 
+                  name="progress_status"
                   defaultValue={activeDevice?.progress_status || "New"}
                 >
                   <option value="New">New</option>
@@ -1478,9 +1491,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
               </div>
               <div className="form-group">
                 <label htmlFor="competitor_name">Competitor</label>
-                <select 
+                <select
                   id="competitor_name"
-                  name="competitor_name" 
+                  name="competitor_name"
                   defaultValue={activeDevice?.competitor_name || ""}
                 >
                   <option value="">None</option>
@@ -1508,32 +1521,32 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
           <form onSubmit={(e) => handleSaveProject(e, subView.contact.id)} className="corporate-form">
             <div className="form-group">
               <label htmlFor="dtl_proj">Project Detail / Name *</label>
-              <textarea 
+              <textarea
                 id="dtl_proj"
-                name="dtl" 
-                rows={3} 
-                defaultValue={activeProject?.dtl || ""} 
-                placeholder="e.g. Bitdefender Cloud Antivirus implementation" 
-                required 
+                name="dtl"
+                rows={3}
+                defaultValue={activeProject?.dtl || ""}
+                placeholder="e.g. Bitdefender Cloud Antivirus implementation"
+                required
               />
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label htmlFor="close_date">Expected Close Date</label>
-                <input 
+                <input
                   id="close_date"
-                  name="close_date" 
-                  type="date" 
-                  defaultValue={activeProject?.close_date || ""} 
+                  name="close_date"
+                  type="date"
+                  defaultValue={activeProject?.close_date || ""}
                 />
               </div>
               <input type="hidden" name="point" value="0" />
             </div>
             <div className="form-group">
               <label htmlFor="progress_status_proj">Status</label>
-              <select 
+              <select
                 id="progress_status_proj"
-                name="progress_status" 
+                name="progress_status"
                 defaultValue={activeProject?.progress_status || "New"}
               >
                 <option value="New">New</option>
