@@ -1361,13 +1361,12 @@ table.corporate-table tr.urgent-row {
   color: #fff;
 }
 
-/* Completeness Filter Row & Dropdown styling */
 .completeness-filter-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 12px;
-  padding-top: 12px;
+  padding: 12px 20px;
+  background: var(--iic-surface);
   border-top: 1px solid var(--iic-border);
   gap: 16px;
   flex-wrap: wrap;
@@ -1387,30 +1386,57 @@ table.corporate-table tr.urgent-row {
   color: var(--iic-muted);
 }
 
-.completeness-filter-pills {
+/* Sleek Segmented Control */
+.segmented-control {
   display: flex;
-  gap: 6px;
+  background: var(--iic-dark);
+  border: 1px solid var(--iic-border);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
 }
 
-.completeness-filter-pills .filter-pill {
+.segmented-control .control-item {
   height: 26px;
-  padding: 0 10px;
-  border-radius: 13px;
+  padding: 0 12px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--iic-muted);
   font-size: 11px;
   font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+}
+
+.segmented-control .control-item:hover {
+  color: var(--iic-text);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.segmented-control .control-item.active {
+  background: var(--iic-card);
+  color: var(--iic-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .missing-field-select {
   height: 30px;
-  padding: 4px 8px;
+  padding: 0 12px;
   border-radius: 6px;
   border: 1px solid var(--iic-border);
   font-size: 12px;
-  background: var(--iic-card);
+  font-weight: 600;
+  background: var(--iic-dark);
   color: var(--iic-text);
   min-width: 160px;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
+  cursor: pointer;
 }
 
 .missing-field-select:focus {

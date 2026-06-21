@@ -705,7 +705,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   <span className="completeness-filter-label">
                     Completeness:
                   </span>
-                  <div className="completeness-filter-pills">
+                  <div className="segmented-control" role="group" aria-label="Completeness filters">
                     {[
                       { id: "all", label: "All" },
                       { id: "incomplete", label: "Incomplete" },
@@ -714,7 +714,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       <button
                         key={opt.id}
                         type="button"
-                        className={`filter-pill ${completenessFilter === opt.id ? "active" : ""}`}
+                        className={`control-item ${completenessFilter === opt.id ? "active" : ""}`}
                         onClick={() => {
                           setCompletenessFilter(opt.id as any);
                           setPage(1);
@@ -761,17 +761,18 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   <thead>
                     <tr>
                       <th style={{ width: "4%" }}>No.</th>
-                      <th style={{ width: "34%" }}>Name / Address</th>
+                      <th style={{ width: "30%" }}>Name / Address</th>
                       <th style={{ width: "12%" }}>Start Date</th>
                       <th style={{ width: "12%" }}>Status</th>
-                      <th style={{ width: "13%" }}>Business</th>
-                      <th style={{ width: "25%", textAlign: "right" }}>Actions</th>
+                      <th style={{ width: "12%" }}>Business</th>
+                      <th style={{ width: "12%" }}>Completeness</th>
+                      <th style={{ width: "18%", textAlign: "right" }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isLoading ? (
                       <tr>
-                        <td colSpan={6} style={{ textAlign: "center", padding: "32px 0" }}>
+                        <td colSpan={7} style={{ textAlign: "center", padding: "32px 0" }}>
                           Loading database customers...
                         </td>
                       </tr>
@@ -805,66 +806,66 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                               c.bt_type
                             )}
                           </td>
-
+                          <td>
+                            <div className="popover-container">
+                              {(() => {
+                                const missingFields = getCustomerMissingFields(c);
+                                const isComplete = missingFields.length === 0;
+                                return isComplete ? (
+                                  <span className="status-badge approved" title="ข้อมูลครบถ้วน">
+                                    <Check size={12} style={{ color: "#15803d" }} /> Complete
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="status-badge wait missing-badge-button"
+                                    title="ข้อมูลไม่ครบถ้วน"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenPopoverCustomerId(prev => prev === c.id ? null : c.id);
+                                    }}
+                                    aria-label={`Show missing fields for ${c.name}`}
+                                  >
+                                    <AlertCircle size={12} style={{ color: "#b45309" }} /> Incomplete
+                                  </button>
+                                );
+                              })()}
+                              
+                              {openPopoverCustomerId === c.id && (
+                                <div 
+                                  className="missing-fields-popover"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <h4>Missing Fields</h4>
+                                  {(() => {
+                                    const missingFields = getCustomerMissingFields(c);
+                                    if (missingFields.length > 0) {
+                                      return (
+                                        <div className="missing-fields-list">
+                                          {missingFields.map((field) => (
+                                            <span 
+                                              key={field} 
+                                              className="status-badge wait" 
+                                            >
+                                              {missingFieldLabels[field]}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      );
+                                    } else {
+                                      return (
+                                        <span className="missing-fields-complete">
+                                          <Check size={12} /> ข้อมูลครบถ้วน
+                                        </span>
+                                      );
+                                    }
+                                  })()}
+                                </div>
+                              )}
+                            </div>
+                          </td>
                           <td style={{ textAlign: "right" }}>
                             <div className="row-actions">
-                              <div className="popover-container">
-                                {(() => {
-                                  const missingFields = getCustomerMissingFields(c);
-                                  const isComplete = missingFields.length === 0;
-                                  return isComplete ? (
-                                    <span className="status-badge approved" title="ข้อมูลครบถ้วน">
-                                      <Check size={12} style={{ color: "#15803d" }} /> Complete
-                                    </span>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className="status-badge wait missing-badge-button"
-                                      title="ข้อมูลไม่ครบถ้วน"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setOpenPopoverCustomerId(prev => prev === c.id ? null : c.id);
-                                      }}
-                                      aria-label={`Show missing fields for ${c.name}`}
-                                    >
-                                      <AlertCircle size={12} style={{ color: "#b45309" }} /> Incomplete
-                                    </button>
-                                  );
-                                })()}
-                                
-                                {openPopoverCustomerId === c.id && (
-                                  <div 
-                                    className="missing-fields-popover"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <h4>Missing Fields</h4>
-                                    {(() => {
-                                      const missingFields = getCustomerMissingFields(c);
-                                      if (missingFields.length > 0) {
-                                        return (
-                                          <div className="missing-fields-list">
-                                            {missingFields.map((field) => (
-                                              <span 
-                                                key={field} 
-                                                className="status-badge wait" 
-                                              >
-                                                {missingFieldLabels[field]}
-                                              </span>
-                                            ))}
-                                          </div>
-                                        );
-                                      } else {
-                                        return (
-                                          <span className="missing-fields-complete">
-                                            <Check size={12} /> ข้อมูลครบถ้วน
-                                          </span>
-                                        );
-                                      }
-                                    })()}
-                                  </div>
-                                )}
-                              </div>
-
                               {(c.status === "Assigned" || c.status === "REPLACE" || c.status === "Booking" || c.status === "Win" || c.status === "Sent" || c.status === "Wait") && (
                                 <button
                                   className="action-pill blue"
@@ -910,7 +911,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} style={{ textAlign: "center", padding: "32px 0" }}>
+                        <td colSpan={7} style={{ textAlign: "center", padding: "32px 0" }}>
                           No customers found.
                         </td>
                       </tr>
