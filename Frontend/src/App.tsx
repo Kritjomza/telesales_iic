@@ -9,6 +9,7 @@ import {
   Database
 } from "lucide-react";
 import { Toast, type ToastItem } from "./components/Toast";
+import { AiChatWidget } from "./components/AiChatWidget";
 import { CustomerManageView } from "./views/CustomerManageView";
 import { CostSheetView } from "./views/CostSheetView";
 import { ReportsView } from "./views/ReportsView";
@@ -307,6 +308,8 @@ function App() {
           </>
         )}
       </div>
+
+      <AiChatWidget />
 
       {/* Global Toast Notifications */}
       <Toast toasts={toasts} onClose={removeToast} />
