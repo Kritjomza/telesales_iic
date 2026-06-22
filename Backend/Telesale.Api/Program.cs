@@ -62,6 +62,8 @@ builder.Services.AddHttpClient<Telesale.Api.Services.ClaudeProvider>();
 builder.Services.AddHttpClient<Telesale.Api.Services.OpenAiProvider>();
 
 builder.Services.AddScoped<Telesale.Api.Services.AiProviderFactory>();
+builder.Services.AddScoped<Telesale.Api.Services.ICustomerContextService, Telesale.Api.Services.CustomerContextService>();
+builder.Services.AddScoped<Telesale.Api.Services.IAiChatService, Telesale.Api.Services.AiChatService>();
 builder.Services.AddScoped<Telesale.Api.Services.IEmailNotificationService, Telesale.Api.Services.EmailNotificationService>();
 builder.Services.AddScoped<Telesale.Api.Services.IImportNormalizationService, Telesale.Api.Services.ImportNormalizationService>();
 builder.Services.AddScoped<Telesale.Api.Services.IAiExtractionService, Telesale.Api.Services.AiExtractionService>();

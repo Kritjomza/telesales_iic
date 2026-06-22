@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Telesale.Api.Helpers;
 using Telesale.Api.Models;
+using Telesale.Api.Services;
 
 namespace Telesale.Api.Controllers;
 
@@ -10,10 +12,17 @@ namespace Telesale.Api.Controllers;
 public class AiChatController : ControllerBase
 {
     private const int MaxMessageLength = 500;
-    private const string MockReply = "AI Chat Assistant endpoint is ready. Customer context retrieval will be added in Sprint 2.";
+    private readonly IAiChatService _aiChatService;
+
+    public AiChatController(IAiChatService aiChatService)
+    {
+        _aiChatService = aiChatService;
+    }
 
     [HttpPost]
-    public IActionResult SendMessage([FromBody] AiChatRequestDto? request)
+    public async Task<IActionResult> SendMessage(
+        [FromBody] AiChatRequestDto? request,
+        CancellationToken cancellationToken)
     {
         var message = request?.Message?.Trim();
 
@@ -27,9 +36,17 @@ public class AiChatController : ControllerBase
             return BadRequest(new { message = "Message must be 500 characters or fewer." });
         }
 
-        return Ok(new AiChatResponseDto
+        if (!User.CanReadManagementData())
         {
-            Reply = MockReply
-        });
+            return Forbid();
+        }
+
+        var response = await _aiChatService.SendMessageAsync(
+            message,
+            request?.ContextCustomerId,
+            User,
+            cancellationToken);
+
+        return Ok(response);
     }
 }
