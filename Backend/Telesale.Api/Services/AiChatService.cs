@@ -50,6 +50,7 @@ public sealed class AiChatService : IAiChatService
 
         if (_useOpenRouter && context.Matches.Count == 1)
         {
+            // TODO: enforce a per-user daily AI-summary quota when the app has a shared rate-limit service.
             var prompt = _promptBuilder.BuildSummaryPrompt(message, context);
             var summary = await _openRouterClient.SummarizeAsync(prompt, cancellationToken);
             if (!string.IsNullOrWhiteSpace(summary))

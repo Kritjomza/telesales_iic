@@ -19,6 +19,13 @@ const quickPrompts = [
 
 const createMessageId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+const getSourceLabel = (source?: string) => {
+  if (source === "ai_summary") return "สรุปโดย AI จากข้อมูลในระบบ";
+  if (source === "database_fallback") return "ใช้คำตอบสำรองจากข้อมูลในระบบ";
+  if (source === "database") return "ตอบจากข้อมูลในระบบ";
+  return "";
+};
+
 export function AiChatWidget() {
   const [isMounted, setIsMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -27,7 +34,8 @@ export function AiChatWidget() {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
   const closeTimerRef = useRef<number | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     return () => {
@@ -42,6 +50,10 @@ export function AiChatWidget() {
       inputRef.current?.focus();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [messages, isSending]);
 
   const openPanel = () => {
     if (closeTimerRef.current) {
@@ -85,7 +97,7 @@ export function AiChatWidget() {
         }
       ]);
     } catch {
-      setError("Unable to contact the AI assistant.");
+      setError("ไม่สามารถเรียกใช้งานผู้ช่วยได้ชั่วคราว");
     } finally {
       setIsSending(false);
     }
@@ -96,7 +108,7 @@ export function AiChatWidget() {
     void sendMessage();
   };
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void sendMessage();
@@ -135,15 +147,13 @@ export function AiChatWidget() {
               <div className="ai-chat-empty">
                 <Bot size={22} />
                 <strong>Ask about customer information</strong>
-                <span>Choose a quick prompt or type a short question to test the assistant endpoint.</span>
+                <span>ถามข้อมูลลูกค้า เช่น ขอเบอร์ติดต่อล่าสุดของบริษัท ...</span>
               </div>
             ) : (
               messages.map((message) => (
                 <div className={`ai-chat-message ${message.role}`} key={message.id}>
-                  {message.role === "assistant" && message.source && (
-                    <span className="ai-chat-source-label">
-                      {message.source === "ai_summary" ? "สรุปโดย AI จากข้อมูลในระบบ" : "ตอบจากข้อมูลในระบบ"}
-                    </span>
+                  {message.role === "assistant" && getSourceLabel(message.source) && (
+                    <span className="ai-chat-source-label">{getSourceLabel(message.source)}</span>
                   )}
                   <span>{message.text}</span>
                 </div>
@@ -155,6 +165,7 @@ export function AiChatWidget() {
                 <span>Preparing response...</span>
               </div>
             )}
+            <div ref={messagesEndRef} aria-hidden="true" />
           </div>
 
           <div className="ai-chat-prompts" aria-label="Quick prompts">
@@ -178,7 +189,7 @@ export function AiChatWidget() {
           )}
 
           <form className="ai-chat-form" onSubmit={handleSubmit}>
-            <input
+            <textarea
               ref={inputRef}
               aria-label="Message"
               value={draft}
@@ -187,6 +198,7 @@ export function AiChatWidget() {
               maxLength={500}
               placeholder="Ask a customer-related question..."
               disabled={isSending}
+              rows={1}
             />
             <button
               type="submit"

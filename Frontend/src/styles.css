@@ -1521,29 +1521,33 @@ table.corporate-table tr.urgent-row {
   background: var(--iic-card);
 }
 
-.ai-chat-form input {
+.ai-chat-form textarea {
   flex: 1;
   min-width: 0;
-  height: 36px;
+  min-height: 36px;
+  max-height: 78px;
   border: 1px solid var(--iic-border);
   border-radius: 6px;
-  padding: 0 11px;
+  padding: 8px 11px;
   background: var(--iic-card);
   color: var(--iic-text);
   outline: 0;
   font-size: 13px;
+  line-height: 1.35;
+  resize: none;
+  overflow-y: auto;
 }
 
-.ai-chat-form input::placeholder {
+.ai-chat-form textarea::placeholder {
   color: var(--text-light);
 }
 
-.ai-chat-form input:focus {
+.ai-chat-form textarea:focus {
   border-color: var(--iic-blue);
   box-shadow: var(--focus-ring);
 }
 
-.ai-chat-form input:disabled {
+.ai-chat-form textarea:disabled {
   background: var(--iic-surface);
   cursor: not-allowed;
 }

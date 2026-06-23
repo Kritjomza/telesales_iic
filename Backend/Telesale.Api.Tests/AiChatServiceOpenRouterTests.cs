@@ -86,6 +86,7 @@ public class AiChatServiceOpenRouterTests
         var prompt = new AiChatPromptBuilder().BuildSummaryPrompt("company Apex", SingleCustomerContext());
 
         Assert.Contains("Answer only from the provided database context.", prompt.SystemPrompt);
+        Assert.Contains("ไม่พบข้อมูลในระบบ", prompt.SystemPrompt);
         Assert.Contains("Apex Medical", prompt.UserPrompt);
         Assert.Contains("02-111-2222", prompt.UserPrompt);
         Assert.DoesNotContain("OPENROUTER_API_KEY", prompt.SystemPrompt + prompt.UserPrompt);
@@ -117,6 +118,36 @@ public class AiChatServiceOpenRouterTests
         Assert.Equal(2, handler.RequestCount);
     }
 
+    [Fact]
+    public async Task OpenRouterClient_ReturnsNullAfterRetry_WhenProviderRateLimits()
+    {
+        var handler = new SequenceHandler(
+            new HttpResponseMessage(HttpStatusCode.TooManyRequests),
+            new HttpResponseMessage(HttpStatusCode.TooManyRequests));
+        var client = CreateOpenRouterClient(handler);
+
+        var result = await client.SummarizeAsync(
+            new OpenRouterPrompt("system rules", "database context"),
+            CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.Equal(2, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task OpenRouterClient_ReturnsNull_WhenResponseContentIsInvalid()
+    {
+        var handler = new SequenceHandler(JsonResponse("""{"choices":[]}"""));
+        var client = CreateOpenRouterClient(handler);
+
+        var result = await client.SummarizeAsync(
+            new OpenRouterPrompt("system rules", "database context"),
+            CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.Equal(1, handler.RequestCount);
+    }
+
     private static CustomerContextResult SingleCustomerContext()
     {
         return new CustomerContextResult(new[]
@@ -145,6 +176,21 @@ public class AiChatServiceOpenRouterTests
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
+    }
+
+    private static OpenRouterClient CreateOpenRouterClient(HttpMessageHandler handler)
+    {
+        var httpClient = new HttpClient(handler);
+        var options = Options.Create(new OpenRouterOptions
+        {
+            ApiKey = "test-key",
+            BaseUrl = "https://openrouter.ai/api/v1/chat/completions",
+            Model = "openrouter/free-model",
+            TimeoutSeconds = 5,
+            MaxTokens = 200
+        });
+
+        return new OpenRouterClient(httpClient, options, NullLogger<OpenRouterClient>.Instance);
     }
 
     private sealed class StubCustomerContextService : ICustomerContextService

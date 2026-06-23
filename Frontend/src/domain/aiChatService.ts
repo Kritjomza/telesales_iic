@@ -5,7 +5,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 export type AiChatResponse = {
   reply: string;
   metadata?: {
-    source: "ai_summary" | "database_fallback" | "database" | string;
+    source: "ai_summary" | "database_fallback" | "database" | "blocked" | "error" | string;
     usedAi: boolean;
     matchedCustomersCount: number;
   };
@@ -23,7 +23,7 @@ export const aiChatService = {
     });
 
     if (!response.ok) {
-      let errorMessage = "Unable to contact the AI assistant.";
+      let errorMessage = "ไม่สามารถเรียกใช้งานผู้ช่วยได้ชั่วคราว";
       try {
         const text = await response.text();
         if (text) {
@@ -33,7 +33,7 @@ export const aiChatService = {
           }
         }
       } catch {
-        errorMessage = "Unable to contact the AI assistant.";
+        errorMessage = "ไม่สามารถเรียกใช้งานผู้ช่วยได้ชั่วคราว";
       }
 
       throw new ApiError(response.status, errorMessage);

@@ -41,6 +41,20 @@ public class AiChatController : ControllerBase
             return Forbid();
         }
 
+        if (ContainsBlockedPrompt(message))
+        {
+            return Ok(new AiChatResponseDto
+            {
+                Reply = "ไม่สามารถตอบคำขอนี้ได้",
+                Metadata = new AiChatMetadataDto
+                {
+                    Source = "blocked",
+                    UsedAi = false,
+                    MatchedCustomersCount = 0
+                }
+            });
+        }
+
         var response = await _aiChatService.SendMessageAsync(
             message,
             request?.ContextCustomerId,
@@ -48,5 +62,18 @@ public class AiChatController : ControllerBase
             cancellationToken);
 
         return Ok(response);
+    }
+
+    private static bool ContainsBlockedPrompt(string message)
+    {
+        var normalized = message.Trim().ToLowerInvariant();
+        return normalized.Contains("system prompt", StringComparison.Ordinal) ||
+            normalized.Contains("api key", StringComparison.Ordinal) ||
+            normalized.Contains("openrouter_api_key", StringComparison.Ordinal) ||
+            normalized.Contains("hidden config", StringComparison.Ordinal) ||
+            normalized.Contains("internal rule", StringComparison.Ordinal) ||
+            normalized.Contains("database password", StringComparison.Ordinal) ||
+            normalized.Contains("db password", StringComparison.Ordinal) ||
+            normalized.Contains("credential", StringComparison.Ordinal);
     }
 }

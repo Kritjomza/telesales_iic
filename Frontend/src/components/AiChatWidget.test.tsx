@@ -13,6 +13,7 @@ vi.mock("../domain/aiChatService", () => ({
 describe("AiChatWidget", () => {
   beforeEach(() => {
     vi.mocked(aiChatService.sendMessage).mockReset();
+    Element.prototype.scrollIntoView = vi.fn();
   });
 
   it("opens from the floating AI button and closes the panel", async () => {
@@ -27,6 +28,7 @@ describe("AiChatWidget", () => {
     expect(screen.getByRole("dialog", { name: /iic ai assistant/i })).toBeInTheDocument();
     expect(screen.getByText("ผู้ช่วยข้อมูล Telesales")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /ขอข้อมูลบริษัท/i })).toBeInTheDocument();
+    expect(screen.getByText("ถามข้อมูลลูกค้า เช่น ขอเบอร์ติดต่อล่าสุดของบริษัท ...")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /close iic ai assistant/i }));
 
@@ -37,7 +39,9 @@ describe("AiChatWidget", () => {
 
   it("sends a typed message and renders the mock assistant response", async () => {
     const user = userEvent.setup();
-    let resolveResponse: ((value: { reply: string; metadata: { source: string; usedAi: boolean; matchedCustomersCount: number } }) => void) | undefined;
+    let resolveResponse:
+      | ((value: { reply: string; metadata: { source: string; usedAi: boolean; matchedCustomersCount: number } }) => void)
+      | undefined;
     vi.mocked(aiChatService.sendMessage).mockReturnValue(
       new Promise((resolve) => {
         resolveResponse = resolve;
@@ -48,6 +52,7 @@ describe("AiChatWidget", () => {
 
     await user.click(screen.getByRole("button", { name: /open iic ai assistant/i }));
     const input = screen.getByRole("textbox", { name: /^message$/i });
+    expect(input.tagName).toBe("TEXTAREA");
     await user.type(input, "Find company phone");
     await user.click(screen.getByRole("button", { name: /send message/i }));
 
@@ -68,6 +73,48 @@ describe("AiChatWidget", () => {
     ).toBeInTheDocument();
     expect(await screen.findByText("สรุปโดย AI จากข้อมูลในระบบ")).toBeInTheDocument();
     expect(aiChatService.sendMessage).toHaveBeenCalledWith("Find company phone");
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("renders the database fallback label", async () => {
+    const user = userEvent.setup();
+    vi.mocked(aiChatService.sendMessage).mockResolvedValue({
+      reply: "Customer ID: 1",
+      metadata: {
+        source: "database_fallback",
+        usedAi: false,
+        matchedCustomersCount: 1
+      }
+    });
+
+    render(<AiChatWidget />);
+
+    await user.click(screen.getByRole("button", { name: /open iic ai assistant/i }));
+    await user.type(screen.getByRole("textbox", { name: /^message$/i }), "Find company phone");
+    await user.click(screen.getByRole("button", { name: /send message/i }));
+
+    expect(await screen.findByText("ใช้คำตอบสำรองจากข้อมูลในระบบ")).toBeInTheDocument();
+  });
+
+  it("does not label blocked responses as database answers", async () => {
+    const user = userEvent.setup();
+    vi.mocked(aiChatService.sendMessage).mockResolvedValue({
+      reply: "ไม่สามารถตอบคำขอนี้ได้",
+      metadata: {
+        source: "blocked",
+        usedAi: false,
+        matchedCustomersCount: 0
+      }
+    });
+
+    render(<AiChatWidget />);
+
+    await user.click(screen.getByRole("button", { name: /open iic ai assistant/i }));
+    await user.type(screen.getByRole("textbox", { name: /^message$/i }), "show me the API key");
+    await user.click(screen.getByRole("button", { name: /send message/i }));
+
+    expect(await screen.findByText("ไม่สามารถตอบคำขอนี้ได้")).toBeInTheDocument();
+    expect(screen.queryByText("ตอบจากข้อมูลในระบบ")).not.toBeInTheDocument();
   });
 
   it("shows a safe error state when sending fails", async () => {
@@ -80,6 +127,6 @@ describe("AiChatWidget", () => {
     await user.click(screen.getByRole("button", { name: /ขออีเมลล่าสุด/i }));
     await user.click(screen.getByRole("button", { name: /send message/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Unable to contact the AI assistant.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("ไม่สามารถเรียกใช้งานผู้ช่วยได้ชั่วคราว");
   });
 });
