@@ -6,6 +6,7 @@ type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
+  source?: string;
 };
 
 const quickPrompts = [
@@ -79,7 +80,8 @@ export function AiChatWidget() {
         {
           id: createMessageId(),
           role: "assistant",
-          text: response.reply
+          text: response.reply,
+          source: response.metadata?.source
         }
       ]);
     } catch {
@@ -138,7 +140,12 @@ export function AiChatWidget() {
             ) : (
               messages.map((message) => (
                 <div className={`ai-chat-message ${message.role}`} key={message.id}>
-                  {message.text}
+                  {message.role === "assistant" && message.source && (
+                    <span className="ai-chat-source-label">
+                      {message.source === "ai_summary" ? "สรุปโดย AI จากข้อมูลในระบบ" : "ตอบจากข้อมูลในระบบ"}
+                    </span>
+                  )}
+                  <span>{message.text}</span>
                 </div>
               ))
             )}

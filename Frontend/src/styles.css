@@ -1445,6 +1445,15 @@ table.corporate-table tr.urgent-row {
   border-bottom-left-radius: 4px;
 }
 
+.ai-chat-source-label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--iic-muted);
+  font-weight: 700;
+}
+
 .ai-chat-loading {
   display: inline-flex;
   align-items: center;

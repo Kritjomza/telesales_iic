@@ -7,10 +7,33 @@ namespace Telesale.Api.Services;
 public sealed class AiChatService : IAiChatService
 {
     private readonly ICustomerContextService _customerContextService;
+    private readonly IOpenRouterClient _openRouterClient;
+    private readonly AiChatPromptBuilder _promptBuilder;
+    private readonly bool _useOpenRouter;
 
     public AiChatService(ICustomerContextService customerContextService)
+        : this(customerContextService, new DisabledOpenRouterClient(), new AiChatPromptBuilder(), false)
+    {
+    }
+
+    public AiChatService(
+        ICustomerContextService customerContextService,
+        IOpenRouterClient openRouterClient,
+        AiChatPromptBuilder promptBuilder)
+        : this(customerContextService, openRouterClient, promptBuilder, true)
+    {
+    }
+
+    private AiChatService(
+        ICustomerContextService customerContextService,
+        IOpenRouterClient openRouterClient,
+        AiChatPromptBuilder promptBuilder,
+        bool useOpenRouter)
     {
         _customerContextService = customerContextService;
+        _openRouterClient = openRouterClient;
+        _promptBuilder = promptBuilder;
+        _useOpenRouter = useOpenRouter;
     }
 
     public async Task<AiChatResponseDto> SendMessageAsync(
@@ -24,6 +47,50 @@ public sealed class AiChatService : IAiChatService
             contextCustomerId,
             user,
             cancellationToken);
+
+        if (_useOpenRouter && context.Matches.Count == 1)
+        {
+            var prompt = _promptBuilder.BuildSummaryPrompt(message, context);
+            var summary = await _openRouterClient.SummarizeAsync(prompt, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(summary))
+            {
+                return new AiChatResponseDto
+                {
+                    Reply = summary,
+                    Metadata = new AiChatMetadataDto
+                    {
+                        Source = "ai_summary",
+                        UsedAi = true,
+                        MatchedCustomersCount = context.Matches.Count
+                    }
+                };
+            }
+
+            return new AiChatResponseDto
+            {
+                Reply = BuildReply(context),
+                Metadata = new AiChatMetadataDto
+                {
+                    Source = "database_fallback",
+                    UsedAi = false,
+                    MatchedCustomersCount = context.Matches.Count
+                }
+            };
+        }
+
+        if (context.Matches.Count > 1)
+        {
+            return new AiChatResponseDto
+            {
+                Reply = BuildReply(context),
+                Metadata = new AiChatMetadataDto
+                {
+                    Source = "database",
+                    UsedAi = false,
+                    MatchedCustomersCount = context.Matches.Count
+                }
+            };
+        }
 
         return new AiChatResponseDto
         {
@@ -91,5 +158,13 @@ public sealed class AiChatService : IAiChatService
     private static string ValueOrUnavailable(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? "not available" : value;
+    }
+
+    private sealed class DisabledOpenRouterClient : IOpenRouterClient
+    {
+        public Task<string?> SummarizeAsync(OpenRouterPrompt prompt, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<string?>(null);
+        }
     }
 }

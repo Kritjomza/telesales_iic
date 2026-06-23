@@ -4,6 +4,11 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export type AiChatResponse = {
   reply: string;
+  metadata?: {
+    source: "ai_summary" | "database_fallback" | "database" | string;
+    usedAi: boolean;
+    matchedCustomersCount: number;
+  };
 };
 
 export const aiChatService = {

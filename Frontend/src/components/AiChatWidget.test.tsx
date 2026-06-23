@@ -37,7 +37,7 @@ describe("AiChatWidget", () => {
 
   it("sends a typed message and renders the mock assistant response", async () => {
     const user = userEvent.setup();
-    let resolveResponse: ((value: { reply: string }) => void) | undefined;
+    let resolveResponse: ((value: { reply: string; metadata: { source: string; usedAi: boolean; matchedCustomersCount: number } }) => void) | undefined;
     vi.mocked(aiChatService.sendMessage).mockReturnValue(
       new Promise((resolve) => {
         resolveResponse = resolve;
@@ -55,12 +55,18 @@ describe("AiChatWidget", () => {
     expect(input).toBeDisabled();
 
     resolveResponse?.({
-      reply: "AI Chat Assistant endpoint is ready. Customer context retrieval will be added in Sprint 2."
+      reply: "AI Chat Assistant endpoint is ready. Customer context retrieval will be added in Sprint 2.",
+      metadata: {
+        source: "ai_summary",
+        usedAi: true,
+        matchedCustomersCount: 1
+      }
     });
 
     expect(
       await screen.findByText("AI Chat Assistant endpoint is ready. Customer context retrieval will be added in Sprint 2.")
     ).toBeInTheDocument();
+    expect(await screen.findByText("สรุปโดย AI จากข้อมูลในระบบ")).toBeInTheDocument();
     expect(aiChatService.sendMessage).toHaveBeenCalledWith("Find company phone");
   });
 
