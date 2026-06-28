@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { apiService, setUnauthorizedCallback, setForbiddenCallback } from "./domain/apiService";
 import {
   BookOpen,
@@ -92,17 +92,17 @@ function App() {
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   // Global Toast State
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const showToast = (message: string, type: "success" | "error" | "info") => {
+  const showToast = useCallback((message: string, type: "success" | "error" | "info") => {
     const newToast: ToastItem = {
       id: Math.random().toString(36).substring(2, 9),
       message,
       type
     };
     setToasts((prev) => [...prev, newToast]);
-  };
-  const removeToast = (id: string) => {
+  }, []);
+  const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, []);
   // Setup 401/403 callbacks and check session on mount
   useEffect(() => {
     setUnauthorizedCallback(() => {

@@ -1,6 +1,11 @@
 using Xunit;
 using System.Collections.Generic;
 using Telesale.Api.Helpers;
+using Microsoft.EntityFrameworkCore;
+using Telesale.Api.Data;
+using Telesale.Api.Models;
+using System.Threading.Tasks;
+using System;
 
 namespace Telesale.Api.Tests;
 

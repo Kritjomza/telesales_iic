@@ -260,6 +260,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         missingFieldFilter
       );
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     page,
     pageSize,
@@ -269,8 +270,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     appliedTelesaleFilter,
     completenessFilter,
     missingFieldFilter,
-    subView.type,
-    fetchCustomers
+    subView.type
   ]);
 
   // Debounce search in CustomerWorkspace list view

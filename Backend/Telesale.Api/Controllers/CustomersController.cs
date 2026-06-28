@@ -153,7 +153,6 @@ public class CustomersController : ControllerBase
             var filteredQuery = ApplyCompletenessFilters(query, completeness, missingField);
             var rawItems = await filteredQuery.AsNoTracking()
                 .OrderBy(c => c.id)
-                .Take(500)
                 .Select(c => new
                 {
                     c.id,
@@ -534,6 +533,20 @@ public class CustomersController : ControllerBase
         int? btId = bt != null ? (int?)bt.id : null;
 
         var cleanCapital = dto.capital?.Replace(",", "") ?? "0";
+
+        DateOnly? startDate = null;
+        if (!string.IsNullOrEmpty(dto.start_dt))
+        {
+            if (DateOnly.TryParse(dto.start_dt, out var parsedDate))
+            {
+                startDate = parsedDate;
+            }
+        }
+        else
+        {
+            startDate = DateOnly.FromDateTime(DateTime.Today);
+        }
+
         var c = new customer
         {
             name = dto.name,
@@ -546,7 +559,7 @@ public class CustomersController : ControllerBase
             is_active = true,
             created_at = DateTime.UtcNow,
             updated_at = DateTime.UtcNow,
-            start_dt = DateOnly.FromDateTime(DateTime.Today),
+            start_dt = startDate,
             owner_id = (int?)userId.Value,
             subdistrict = dto.subdistrict,
             district = dto.district,
@@ -608,6 +621,18 @@ public class CustomersController : ControllerBase
         {
             var bt = await _db.business_types.FirstOrDefaultAsync(b => b.type == dto.bt_type, cancellationToken);
             if (bt != null) c.business_type_id = (int)bt.id;
+        }
+
+        if (dto.start_dt != null)
+        {
+            if (string.IsNullOrEmpty(dto.start_dt))
+            {
+                c.start_dt = null;
+            }
+            else if (DateOnly.TryParse(dto.start_dt, out var parsedDate))
+            {
+                c.start_dt = parsedDate;
+            }
         }
 
         c.updated_at = DateTime.UtcNow;
@@ -1487,6 +1512,8 @@ public class CustomerCreateDto
 
     [StringLength(10)]
     public string? postal_code { get; set; }
+
+    public string? start_dt { get; set; }
 }
 
 public class CustomerUpdateDto
@@ -1522,6 +1549,8 @@ public class CustomerUpdateDto
 
     [StringLength(10)]
     public string? postal_code { get; set; }
+
+    public string? start_dt { get; set; }
 }
 
 public class CustomerAssignDto
