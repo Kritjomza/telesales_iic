@@ -17,33 +17,33 @@ public class AiChatServiceOpenRouterTests
         var openRouter = new StubOpenRouterClient("Apex Medical is a New healthcare customer in Bangkok.");
         var service = new AiChatService(contextService, openRouter, new AiChatPromptBuilder());
 
-        var response = await service.SendMessageAsync("company Apex", null, new ClaimsPrincipal(), default);
+        var response = await service.SendMessageAsync("company Apex", null, null, null, new ClaimsPrincipal(), default);
 
         Assert.Equal("Apex Medical is a New healthcare customer in Bangkok.", response.Reply);
-        Assert.Equal("ai_summary", response.Metadata.Source);
+        Assert.Equal("ai_tool_answer", response.Metadata.Source);
         Assert.True(response.Metadata.UsedAi);
         Assert.Equal(1, response.Metadata.MatchedCustomersCount);
-        Assert.Equal(1, openRouter.CallCount);
+        Assert.Equal(1, openRouter.SummaryCallCount);
     }
 
     [Fact]
-    public async Task SendMessage_DoesNotCallOpenRouter_WhenNoCustomerContextMatches()
+    public async Task SendMessage_ReturnsAiToolAnswer_WhenNoCustomerContextMatches()
     {
         var contextService = new StubCustomerContextService(new CustomerContextResult(Array.Empty<CustomerContextCustomer>()));
         var openRouter = new StubOpenRouterClient("should not be used");
         var service = new AiChatService(contextService, openRouter, new AiChatPromptBuilder());
 
-        var response = await service.SendMessageAsync("company Unknown", null, new ClaimsPrincipal(), default);
+        var response = await service.SendMessageAsync("company Unknown", null, null, null, new ClaimsPrincipal(), default);
 
-        Assert.Equal("No matching customer was found in the database.", response.Reply);
-        Assert.Equal("database", response.Metadata.Source);
-        Assert.False(response.Metadata.UsedAi);
+        Assert.Equal("should not be used", response.Reply);
+        Assert.Equal("ai_tool_answer", response.Metadata.Source);
+        Assert.True(response.Metadata.UsedAi);
         Assert.Equal(0, response.Metadata.MatchedCustomersCount);
-        Assert.Equal(0, openRouter.CallCount);
+        Assert.Equal(1, openRouter.SummaryCallCount);
     }
 
     [Fact]
-    public async Task SendMessage_DoesNotCallOpenRouter_WhenMultipleCustomersMatch()
+    public async Task SendMessage_UsesOpenRouterFinalAnswer_WhenMultipleCustomersMatch()
     {
         var contextService = new StubCustomerContextService(new CustomerContextResult(new[]
         {
@@ -53,15 +53,13 @@ public class AiChatServiceOpenRouterTests
         var openRouter = new StubOpenRouterClient("should not be used");
         var service = new AiChatService(contextService, openRouter, new AiChatPromptBuilder());
 
-        var response = await service.SendMessageAsync("company Apex", null, new ClaimsPrincipal(), default);
+        var response = await service.SendMessageAsync("company Apex", null, null, null, new ClaimsPrincipal(), default);
 
-        Assert.Contains("Apex Medical", response.Reply);
-        Assert.Contains("Apex Logistics", response.Reply);
-        Assert.Contains("specify", response.Reply, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("database", response.Metadata.Source);
-        Assert.False(response.Metadata.UsedAi);
+        Assert.Equal("should not be used", response.Reply);
+        Assert.Equal("ai_tool_answer", response.Metadata.Source);
+        Assert.True(response.Metadata.UsedAi);
         Assert.Equal(2, response.Metadata.MatchedCustomersCount);
-        Assert.Equal(0, openRouter.CallCount);
+        Assert.Equal(1, openRouter.SummaryCallCount);
     }
 
     [Fact]
@@ -71,13 +69,36 @@ public class AiChatServiceOpenRouterTests
         var openRouter = new StubOpenRouterClient(null);
         var service = new AiChatService(contextService, openRouter, new AiChatPromptBuilder());
 
-        var response = await service.SendMessageAsync("company Apex", null, new ClaimsPrincipal(), default);
+        var response = await service.SendMessageAsync("company Apex", null, null, null, new ClaimsPrincipal(), default);
 
         Assert.Contains("Apex Medical", response.Reply);
         Assert.Contains("02-111-2222", response.Reply);
         Assert.Equal("database_fallback", response.Metadata.Source);
         Assert.False(response.Metadata.UsedAi);
         Assert.Equal(1, response.Metadata.MatchedCustomersCount);
+    }
+
+    [Fact]
+    public async Task SendMessage_UsesOpenRouterIntentJson_ToRouteGlobalNearExpiry()
+    {
+        var contextService = new CapturingCustomerContextService(new CustomerContextResult(new[]
+        {
+            Customer(1, "Apex Medical")
+        }, IsGlobalNearExpiry: true));
+        var openRouter = new StubOpenRouterClient(
+            "ลูกค้าใกล้หมดอายุคือ Apex Medical",
+            """{"intent":"global_near_expiry","companyKeyword":null,"isFollowUp":false,"needsGlobalSearch":true,"limit":5,"sortBy":"renewalDays"}""");
+        var service = new AiChatService(contextService, openRouter, new AiChatPromptBuilder());
+
+        var response = await service.SendMessageAsync("ขอบริษัทที่ใกล้หมดอายุ 5 ลำดับแรก", null, 10, "Old Customer", new ClaimsPrincipal(), default);
+
+        Assert.Equal("ลูกค้าใกล้หมดอายุคือ Apex Medical", response.Reply);
+        Assert.Equal("ai_tool_answer", response.Metadata.Source);
+        Assert.NotNull(contextService.LastRequest);
+        Assert.Equal(AiChatToolAction.GetNearExpiryCustomers, contextService.LastRequest!.ToolAction);
+        Assert.True(contextService.LastRequest.NeedsGlobalSearch);
+        Assert.Equal(5, contextService.LastRequest.Limit);
+        Assert.Null(contextService.LastRequest.ContextCustomerId);
     }
 
     [Fact]
@@ -166,6 +187,8 @@ public class AiChatServiceOpenRouterTests
             "New",
             "Healthcare",
             new DateTime(2026, 6, 1),
+            null,
+            null,
             new[] { new CustomerContextContact("Narin", "081-111-2222", "narin@example.com") },
             Array.Empty<string>());
     }
@@ -203,8 +226,7 @@ public class AiChatServiceOpenRouterTests
         }
 
         public Task<CustomerContextResult> GetCustomerContextAsync(
-            string message,
-            uint? contextCustomerId,
+            CustomerContextRequest request,
             ClaimsPrincipal user,
             CancellationToken cancellationToken)
         {
@@ -215,18 +237,46 @@ public class AiChatServiceOpenRouterTests
     private sealed class StubOpenRouterClient : IOpenRouterClient
     {
         private readonly string? _summary;
+        private readonly string? _intentJson;
 
-        public StubOpenRouterClient(string? summary)
+        public StubOpenRouterClient(string? summary, string? intentJson = null)
         {
             _summary = summary;
+            _intentJson = intentJson;
         }
 
-        public int CallCount { get; private set; }
+        public int SummaryCallCount { get; private set; }
+
+        public Task<string?> InterpretIntentAsync(OpenRouterPrompt prompt, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_intentJson);
+        }
 
         public Task<string?> SummarizeAsync(OpenRouterPrompt prompt, CancellationToken cancellationToken)
         {
-            CallCount++;
+            SummaryCallCount++;
             return Task.FromResult(_summary);
+        }
+    }
+
+    private sealed class CapturingCustomerContextService : ICustomerContextService
+    {
+        private readonly CustomerContextResult _result;
+
+        public CapturingCustomerContextService(CustomerContextResult result)
+        {
+            _result = result;
+        }
+
+        public CustomerContextRequest? LastRequest { get; private set; }
+
+        public Task<CustomerContextResult> GetCustomerContextAsync(
+            CustomerContextRequest request,
+            ClaimsPrincipal user,
+            CancellationToken cancellationToken)
+        {
+            LastRequest = request;
+            return Task.FromResult(_result);
         }
     }
 

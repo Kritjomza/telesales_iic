@@ -5,21 +5,33 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 export type AiChatResponse = {
   reply: string;
   metadata?: {
-    source: "ai_summary" | "database_fallback" | "database" | "blocked" | "error" | string;
+    source: "ai_tool_answer" | "ai_summary" | "database_fallback" | "database" | "blocked" | "error" | string;
     usedAi: boolean;
     matchedCustomersCount: number;
+    selectedCustomerId?: number;
+    selectedCustomerName?: string;
+    intent?: string;
   };
 };
 
+export type AiChatContext = {
+  lastSelectedCustomerId: number;
+  lastSelectedCustomerName: string;
+};
+
 export const aiChatService = {
-  async sendMessage(message: string): Promise<AiChatResponse> {
+  async sendMessage(message: string, context?: AiChatContext): Promise<AiChatResponse> {
     const response = await fetch(`${API_BASE}/ai-chat`, {
       method: "POST",
       credentials: "same-origin",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ message })
+      body: JSON.stringify({
+        message,
+        lastSelectedCustomerId: context?.lastSelectedCustomerId,
+        lastSelectedCustomerName: context?.lastSelectedCustomerName
+      })
     });
 
     if (!response.ok) {

@@ -23,6 +23,16 @@ public sealed class OpenRouterClient : IOpenRouterClient
 
     public async Task<string?> SummarizeAsync(OpenRouterPrompt prompt, CancellationToken cancellationToken)
     {
+        return await SendPromptAsync(prompt, "summary", cancellationToken);
+    }
+
+    public async Task<string?> InterpretIntentAsync(OpenRouterPrompt prompt, CancellationToken cancellationToken)
+    {
+        return await SendPromptAsync(prompt, "intent", cancellationToken);
+    }
+
+    private async Task<string?> SendPromptAsync(OpenRouterPrompt prompt, string purpose, CancellationToken cancellationToken)
+    {
         if (string.IsNullOrWhiteSpace(_options.ApiKey))
         {
             _logger.LogWarning("OpenRouter API key is not configured.");
@@ -40,7 +50,7 @@ public sealed class OpenRouterClient : IOpenRouterClient
                 using var response = await _httpClient.SendAsync(request, timeoutCts.Token);
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("OpenRouter summary request failed with status {StatusCode}.", (int)response.StatusCode);
+                    _logger.LogWarning("OpenRouter {Purpose} request failed with status {StatusCode}.", purpose, (int)response.StatusCode);
                     if (attempt == 1)
                     {
                         continue;
@@ -54,7 +64,7 @@ public sealed class OpenRouterClient : IOpenRouterClient
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                _logger.LogWarning("OpenRouter summary request timed out.");
+                _logger.LogWarning("OpenRouter {Purpose} request timed out.", purpose);
                 if (attempt == 1)
                 {
                     continue;
@@ -64,7 +74,7 @@ public sealed class OpenRouterClient : IOpenRouterClient
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "OpenRouter summary request failed.");
+                _logger.LogWarning(ex, "OpenRouter {Purpose} request failed.", purpose);
                 if (attempt == 1)
                 {
                     continue;

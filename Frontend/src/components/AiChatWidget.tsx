@@ -1,6 +1,7 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Bot, Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { aiChatService } from "../domain/aiChatService";
+import type { AiChatContext } from "../domain/aiChatService";
 
 type ChatMessage = {
   id: string;
@@ -20,6 +21,7 @@ const quickPrompts = [
 const createMessageId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const getSourceLabel = (source?: string) => {
+  if (source === "ai_tool_answer") return "สรุปโดย AI จากข้อมูลในระบบ";
   if (source === "ai_summary") return "สรุปโดย AI จากข้อมูลในระบบ";
   if (source === "database_fallback") return "ใช้คำตอบสำรองจากข้อมูลในระบบ";
   if (source === "database") return "ตอบจากข้อมูลในระบบ";
@@ -33,6 +35,7 @@ export function AiChatWidget() {
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
+  const [lastSelectedCustomer, setLastSelectedCustomer] = useState<AiChatContext | undefined>();
   const closeTimerRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -86,7 +89,13 @@ export function AiChatWidget() {
     setMessages((current) => [...current, userMessage]);
 
     try {
-      const response = await aiChatService.sendMessage(message);
+      const response = await aiChatService.sendMessage(message, lastSelectedCustomer);
+      if (response.metadata?.selectedCustomerId && response.metadata.selectedCustomerName) {
+        setLastSelectedCustomer({
+          lastSelectedCustomerId: response.metadata.selectedCustomerId,
+          lastSelectedCustomerName: response.metadata.selectedCustomerName
+        });
+      }
       setMessages((current) => [
         ...current,
         {

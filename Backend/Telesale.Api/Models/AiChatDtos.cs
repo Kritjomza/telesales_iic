@@ -5,6 +5,10 @@ public class AiChatRequestDto
     public string? Message { get; set; }
 
     public uint? ContextCustomerId { get; set; }
+
+    public uint? LastSelectedCustomerId { get; set; }
+
+    public string? LastSelectedCustomerName { get; set; }
 }
 
 public class AiChatResponseDto
@@ -21,4 +25,10 @@ public class AiChatMetadataDto
     public bool UsedAi { get; set; }
 
     public int MatchedCustomersCount { get; set; }
+
+    public uint? SelectedCustomerId { get; set; }
+
+    public string? SelectedCustomerName { get; set; }
+
+    public string? Intent { get; set; }
 }

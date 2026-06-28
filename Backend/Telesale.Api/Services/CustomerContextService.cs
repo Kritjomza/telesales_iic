@@ -8,9 +8,10 @@ namespace Telesale.Api.Services;
 
 public sealed class CustomerContextService : ICustomerContextService
 {
-    private const int CandidateQueryLimit = 25;
     private const int ReturnedCandidateLimit = 5;
+    private const int BroadCandidateLimit = 250;
     private const int ContactLimitPerCustomer = 3;
+    private const int NearExpiryDays = 30;
     private readonly TelesaleDbContext _db;
 
     public CustomerContextService(TelesaleDbContext db)
@@ -19,17 +20,21 @@ public sealed class CustomerContextService : ICustomerContextService
     }
 
     public async Task<CustomerContextResult> GetCustomerContextAsync(
-        string message,
-        uint? contextCustomerId,
+        CustomerContextRequest request,
         ClaimsPrincipal user,
         CancellationToken cancellationToken)
     {
         var scopedCustomers = _db.customers.ApplyCustomerScope(user, _db).AsNoTracking();
 
-        if (contextCustomerId.HasValue)
+        if (request.ToolAction == AiChatToolAction.GetNearExpiryCustomers)
+        {
+            return await GetGlobalNearExpiryAsync(scopedCustomers, request.Limit, request.SortBy, cancellationToken);
+        }
+
+        if (request.ContextCustomerId.HasValue)
         {
             var selected = await scopedCustomers
-                .Where(c => c.id == contextCustomerId.Value)
+                .Where(c => c.id == request.ContextCustomerId.Value)
                 .Take(1)
                 .Select(c => new CustomerContextRow
                 {
@@ -39,6 +44,7 @@ public sealed class CustomerContextService : ICustomerContextService
                     Address = c.address,
                     Status = c.status,
                     BusinessTypeId = c.business_type_id,
+                    StartDate = c.start_dt,
                     UpdatedAt = c.updated_at ?? c.created_at
                 })
                 .ToListAsync(cancellationToken);
@@ -46,57 +52,28 @@ public sealed class CustomerContextService : ICustomerContextService
             return new CustomerContextResult(await HydrateRowsAsync(selected, cancellationToken));
         }
 
-        var keyword = ExtractCompanyKeyword(message);
-        var searchTerm = CustomerSearch.NormalizeMultiToken(keyword);
-        if (searchTerm == null)
+        var keyword = request.CompanyKeyword;
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            keyword = ExtractCompanyKeyword(request.Message);
+        }
+
+        var tokens = BuildCompanyTokens(keyword);
+        if (tokens.Count == 0)
         {
             return new CustomerContextResult(Array.Empty<CustomerContextCustomer>());
         }
 
-        var predicate = BuildCustomerSearchPredicate(searchTerm);
-        var candidateRows = await scopedCustomers
-            .Where(predicate)
-            .OrderBy(c => c.id)
-            .Take(CandidateQueryLimit)
-            .Select(c => new CustomerContextRow
-            {
-                Id = c.id,
-                CompanyName = c.name,
-                Phone = c.phone,
-                Address = c.address,
-                Status = c.status,
-                BusinessTypeId = c.business_type_id,
-                UpdatedAt = c.updated_at ?? c.created_at
-            })
-            .ToListAsync(cancellationToken);
-
+        var candidateRows = await LoadCandidateRowsAsync(scopedCustomers, tokens, cancellationToken);
         var hydrated = await HydrateRowsAsync(candidateRows, cancellationToken);
         var ranked = hydrated
-            .Select(customer =>
+            .Select(customer => new
             {
-                var document = new CustomerSearchDocument(
-                    new Models.customer
-                    {
-                        id = customer.Id,
-                        name = customer.CompanyName,
-                        phone = customer.Phone,
-                        address = customer.Address,
-                        status = customer.Status ?? string.Empty,
-                        create_type = "Key"
-                    },
-                    customer.BusinessType,
-                    SaleName: null,
-                    TelesaleName: null,
-                    customer.Contacts.Select(c => new ContactSearchDocument(c.Name, c.Phone, c.Email)));
-
-                return new
-                {
-                    Customer = customer,
-                    Match = CustomerSearch.RankDocument(document, searchTerm)
-                };
+                Customer = customer,
+                Rank = RankCompany(customer.CompanyName, tokens, keyword)
             })
-            .Where(x => x.Match != null)
-            .OrderBy(x => x.Match!.Rank)
+            .Where(x => x.Rank.HasValue)
+            .OrderBy(x => x.Rank!.Value)
             .ThenBy(x => x.Customer.Id)
             .Take(ReturnedCandidateLimit)
             .Select(x => x.Customer)
@@ -113,35 +90,228 @@ public sealed class CustomerContextService : ICustomerContextService
             return string.Empty;
         }
 
-        var match = Regex.Match(cleaned, @"(?:บริษัท|company|ลูกค้า)\s+(.+)", RegexOptions.IgnoreCase);
+        var match = Regex.Match(
+            cleaned,
+            @"(?:บริษัท|บจก|จำกัด|company|customer|ลูกค้า)\s+(.+)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
         return match.Success ? CleanMessage(match.Groups[1].Value) : cleaned;
     }
 
-    private static string CleanMessage(string value)
+    internal static string NormalizeCompanyText(string? value)
     {
-        var cleaned = Regex.Replace(value.Trim(), @"[?!.:,;""'()\[\]{}]+", " ");
-        return Regex.Replace(cleaned, @"\s+", " ").Trim();
-    }
-
-    private static System.Linq.Expressions.Expression<Func<Models.customer, bool>> BuildCustomerSearchPredicate(MultiTokenSearchTerm searchTerm)
-    {
-        System.Linq.Expressions.Expression<Func<Models.customer, bool>> predicate = c => false;
-
-        foreach (var token in searchTerm.Tokens)
+        if (string.IsNullOrWhiteSpace(value))
         {
-            var text = token.Text;
-            var phone = token.PhoneText;
-            uint? numericId = uint.TryParse(text, out var parsedId) ? parsedId : null;
-
-            predicate = predicate.Or(c =>
-                (numericId.HasValue && c.id == numericId.Value) ||
-                (c.name != null && (c.name.ToLower() == text || c.name.ToLower().StartsWith(text) || c.name.ToLower().Contains(text))) ||
-                (c.address != null && (c.address.ToLower() == text || c.address.ToLower().StartsWith(text) || c.address.ToLower().Contains(text))) ||
-                (c.code != null && (c.code.ToLower() == text || c.code.ToLower().StartsWith(text) || c.code.ToLower().Contains(text))) ||
-                (c.phone != null && c.phone.Replace(" ", "").Replace("-", "").ToLower().Contains(phone)));
+            return string.Empty;
         }
 
-        return predicate;
+        var normalized = value.Trim().ToLowerInvariant();
+        normalized = Regex.Replace(normalized, @"[?!.:,;""'()\[\]{}]+", " ");
+        normalized = Regex.Replace(normalized, @"\b(co|company|corp|corporation|limited|ltd)\b\.?", " ");
+        normalized = Regex.Replace(normalized, @"บริษํท|บริษัํท|บริษท|บริษัท|บจก\.?|จำกัด|หจก\.?|ห้างหุ้นส่วนจำกัด", " ");
+        normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+        return normalized;
+    }
+
+    private async Task<CustomerContextResult> GetGlobalNearExpiryAsync(
+        IQueryable<Models.customer> scopedCustomers,
+        int? requestedLimit,
+        AiChatSortBy? sortBy,
+        CancellationToken cancellationToken)
+    {
+        var rows = await scopedCustomers
+            .Where(c => c.start_dt.HasValue)
+            .Select(c => new CustomerContextRow
+            {
+                Id = c.id,
+                CompanyName = c.name,
+                Phone = c.phone,
+                Address = c.address,
+                Status = c.status,
+                BusinessTypeId = c.business_type_id,
+                StartDate = c.start_dt,
+                UpdatedAt = c.updated_at ?? c.created_at
+            })
+            .ToListAsync(cancellationToken);
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var limit = Math.Clamp(requestedLimit ?? ReturnedCandidateLimit, 1, 20);
+        var withRenewalDays = rows
+            .Select(row => row with { RenewalDays = CalculateRenewalDays(row.StartDate, today) })
+            .ToList();
+        var nearExpiry = SortExpiryRows(
+                withRenewalDays.Where(row => row.RenewalDays.HasValue && row.RenewalDays.Value <= NearExpiryDays),
+                sortBy)
+            .Take(limit)
+            .ToList();
+        var usedNearestUpcomingFallback = false;
+
+        if (nearExpiry.Count == 0)
+        {
+            usedNearestUpcomingFallback = true;
+            nearExpiry = SortExpiryRows(
+                    withRenewalDays.Where(row => row.RenewalDays.HasValue),
+                    sortBy)
+                .Take(limit)
+                .ToList();
+        }
+
+        return new CustomerContextResult(
+            await HydrateRowsAsync(nearExpiry, cancellationToken),
+            IsGlobalNearExpiry: true,
+            ExpiryFieldSupported: true,
+            UsedNearestUpcomingFallback: usedNearestUpcomingFallback,
+            NearExpiryWindowDays: NearExpiryDays);
+    }
+
+    private static IOrderedEnumerable<CustomerContextRow> SortExpiryRows(
+        IEnumerable<CustomerContextRow> rows,
+        AiChatSortBy? sortBy)
+    {
+        return sortBy == AiChatSortBy.ExpiryDate
+            ? rows.OrderBy(row => row.StartDate?.AddYears(1)).ThenBy(row => row.Id)
+            : rows.OrderBy(row => row.RenewalDays).ThenBy(row => row.Id);
+    }
+
+    private async Task<IReadOnlyList<CustomerContextRow>> LoadCandidateRowsAsync(
+        IQueryable<Models.customer> scopedCustomers,
+        IReadOnlyList<string> tokens,
+        CancellationToken cancellationToken)
+    {
+        var firstToken = tokens[0];
+        var query = scopedCustomers.Where(c =>
+            (c.name != null && c.name.ToLower().Contains(firstToken)) ||
+            (c.code != null && c.code.ToLower().Contains(firstToken)) ||
+            (c.phone != null && c.phone.Replace(" ", "").Replace("-", "").Contains(firstToken)));
+
+        var rows = await SelectRows(query)
+            .Take(BroadCandidateLimit)
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count > 0)
+        {
+            return rows;
+        }
+
+        return await SelectRows(scopedCustomers)
+            .Take(BroadCandidateLimit)
+            .ToListAsync(cancellationToken);
+    }
+
+    private static IQueryable<CustomerContextRow> SelectRows(IQueryable<Models.customer> query)
+    {
+        return query
+            .OrderBy(c => c.id)
+            .Select(c => new CustomerContextRow
+            {
+                Id = c.id,
+                CompanyName = c.name,
+                Phone = c.phone,
+                Address = c.address,
+                Status = c.status,
+                BusinessTypeId = c.business_type_id,
+                StartDate = c.start_dt,
+                UpdatedAt = c.updated_at ?? c.created_at
+            });
+    }
+
+    private static IReadOnlyList<string> BuildCompanyTokens(string? value)
+    {
+        var normalized = NormalizeCompanyText(value);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return Array.Empty<string>();
+        }
+
+        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "ขอ", "แล้ว", "ล่ะ", "ข้อมูล", "ที่ยังขาด", "ยังขาด", "เบอร์", "อีเมล", "ล่าสุด", "ลูกค้า", "หมดอายุ", "ใกล้หมดอายุ", "company", "customer", "info", "phone", "email", "profile"
+        };
+
+        return normalized
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(token => token.Length > 1 && !stopWords.Contains(token))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static int? RankCompany(string companyName, IReadOnlyList<string> tokens, string? originalKeyword)
+    {
+        var normalizedName = NormalizeCompanyText(companyName);
+        var normalizedKeyword = NormalizeCompanyText(originalKeyword);
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedKeyword) && normalizedName == normalizedKeyword)
+        {
+            return 0;
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedKeyword) && normalizedName.Contains(normalizedKeyword))
+        {
+            return 1;
+        }
+
+        if (tokens.All(normalizedName.Contains))
+        {
+            return 2;
+        }
+
+        var nameParts = normalizedName.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (tokens.All(token => nameParts.Any(part => IsMinorTypoMatch(part, token) || part.Contains(token) || token.Contains(part))))
+        {
+            return 3;
+        }
+
+        var matchedTokens = tokens.Count(token =>
+            normalizedName.Contains(token) ||
+            nameParts.Any(part => IsMinorTypoMatch(part, token)));
+
+        return matchedTokens > 0 ? 10 + (tokens.Count - matchedTokens) : null;
+    }
+
+    private static bool IsMinorTypoMatch(string value, string term)
+    {
+        if (value.Length < 3 || term.Length < 3)
+        {
+            return false;
+        }
+
+        if (Math.Abs(value.Length - term.Length) > 2)
+        {
+            return false;
+        }
+
+        return LevenshteinDistance(value, term) <= 2;
+    }
+
+    private static int LevenshteinDistance(string left, string right)
+    {
+        var previous = new int[right.Length + 1];
+        var current = new int[right.Length + 1];
+
+        for (var j = 0; j <= right.Length; j++)
+        {
+            previous[j] = j;
+        }
+
+        for (var i = 1; i <= left.Length; i++)
+        {
+            current[0] = i;
+            for (var j = 1; j <= right.Length; j++)
+            {
+                var cost = left[i - 1] == right[j - 1] ? 0 : 1;
+                current[j] = Math.Min(
+                    Math.Min(current[j - 1] + 1, previous[j] + 1),
+                    previous[j - 1] + cost);
+            }
+
+            (previous, current) = (current, previous);
+        }
+
+        return previous[right.Length];
     }
 
     private async Task<IReadOnlyList<CustomerContextCustomer>> HydrateRowsAsync(
@@ -153,6 +323,7 @@ public sealed class CustomerContextService : ICustomerContextService
             return Array.Empty<CustomerContextCustomer>();
         }
 
+        var today = DateOnly.FromDateTime(DateTime.Today);
         var customerIds = rows.Select(r => r.Id).ToList();
         var businessTypeIds = rows
             .Where(r => r.BusinessTypeId.HasValue && r.BusinessTypeId.Value > 0)
@@ -197,6 +368,9 @@ public sealed class CustomerContextService : ICustomerContextService
             contactsByCustomerId.TryGetValue(row.Id, out var contacts);
             contacts ??= new List<CustomerContextContact>();
 
+            var renewalDays = row.RenewalDays ?? CalculateRenewalDays(row.StartDate, today);
+            var expiryDate = row.StartDate?.AddYears(1);
+
             return new CustomerContextCustomer(
                 row.Id,
                 string.IsNullOrWhiteSpace(row.CompanyName) ? "Unnamed" : row.CompanyName!,
@@ -205,9 +379,16 @@ public sealed class CustomerContextService : ICustomerContextService
                 EmptyToNull(row.Status),
                 EmptyToNull(businessType),
                 row.UpdatedAt,
+                expiryDate,
+                renewalDays,
                 contacts,
                 BuildMissingFields(row, businessType, contacts));
         }).ToList();
+    }
+
+    private static int? CalculateRenewalDays(DateOnly? startDate, DateOnly today)
+    {
+        return startDate.HasValue ? startDate.Value.AddYears(1).DayNumber - today.DayNumber : null;
     }
 
     private static IReadOnlyList<string> BuildMissingFields(
@@ -219,10 +400,17 @@ public sealed class CustomerContextService : ICustomerContextService
         if (string.IsNullOrWhiteSpace(row.Phone)) missing.Add("phone");
         if (string.IsNullOrWhiteSpace(row.Address)) missing.Add("address");
         if (string.IsNullOrWhiteSpace(businessType)) missing.Add("business type");
+        if (!row.StartDate.HasValue) missing.Add("expiry date");
         if (!contacts.Any(c => !string.IsNullOrWhiteSpace(c.Name))) missing.Add("contact name");
         if (!contacts.Any(c => !string.IsNullOrWhiteSpace(c.Phone))) missing.Add("contact phone");
         if (!contacts.Any(c => !string.IsNullOrWhiteSpace(c.Email))) missing.Add("contact email");
         return missing;
+    }
+
+    private static string CleanMessage(string value)
+    {
+        var cleaned = Regex.Replace(value.Trim(), @"[?!.:,;""'()\[\]{}]+", " ");
+        return Regex.Replace(cleaned, @"\s+", " ").Trim();
     }
 
     private static string? EmptyToNull(string? value)
@@ -230,7 +418,7 @@ public sealed class CustomerContextService : ICustomerContextService
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
-    private sealed class CustomerContextRow
+    private sealed record CustomerContextRow
     {
         public uint Id { get; init; }
         public string? CompanyName { get; init; }
@@ -238,6 +426,8 @@ public sealed class CustomerContextService : ICustomerContextService
         public string? Address { get; init; }
         public string? Status { get; init; }
         public int? BusinessTypeId { get; init; }
+        public DateOnly? StartDate { get; init; }
+        public int? RenewalDays { get; init; }
         public DateTime? UpdatedAt { get; init; }
     }
 }

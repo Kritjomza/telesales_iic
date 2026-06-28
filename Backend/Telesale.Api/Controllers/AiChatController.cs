@@ -58,6 +58,8 @@ public class AiChatController : ControllerBase
         var response = await _aiChatService.SendMessageAsync(
             message,
             request?.ContextCustomerId,
+            request?.LastSelectedCustomerId,
+            request?.LastSelectedCustomerName,
             User,
             cancellationToken);
 

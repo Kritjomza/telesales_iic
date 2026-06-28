@@ -62,7 +62,7 @@ describe("AiChatWidget", () => {
     resolveResponse?.({
       reply: "AI Chat Assistant endpoint is ready. Customer context retrieval will be added in Sprint 2.",
       metadata: {
-        source: "ai_summary",
+        source: "ai_tool_answer",
         usedAi: true,
         matchedCustomersCount: 1
       }
@@ -72,8 +72,52 @@ describe("AiChatWidget", () => {
       await screen.findByText("AI Chat Assistant endpoint is ready. Customer context retrieval will be added in Sprint 2.")
     ).toBeInTheDocument();
     expect(await screen.findByText("สรุปโดย AI จากข้อมูลในระบบ")).toBeInTheDocument();
-    expect(aiChatService.sendMessage).toHaveBeenCalledWith("Find company phone");
+    expect(aiChatService.sendMessage).toHaveBeenCalledWith("Find company phone", undefined);
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("sends the last selected customer context with follow-up messages", async () => {
+    const user = userEvent.setup();
+    vi.mocked(aiChatService.sendMessage)
+      .mockResolvedValueOnce({
+        reply: "Customer ID: 10\nCompany: Proten",
+        metadata: {
+          source: "database",
+          usedAi: false,
+          matchedCustomersCount: 1,
+          selectedCustomerId: 10,
+          selectedCustomerName: "Proten"
+        }
+      })
+      .mockResolvedValueOnce({
+        reply: "Proten expires in 7 days.",
+        metadata: {
+          source: "database",
+          usedAi: false,
+          matchedCustomersCount: 1,
+          selectedCustomerId: 10,
+          selectedCustomerName: "Proten"
+        }
+      });
+
+    render(<AiChatWidget />);
+
+    await user.click(screen.getByRole("button", { name: /open iic ai assistant/i }));
+    const input = screen.getByRole("textbox", { name: /^message$/i });
+
+    await user.type(input, "ขอข้อมูลบริษัท Proten");
+    await user.click(screen.getByRole("button", { name: /send message/i }));
+    expect(await screen.findByText(/Company: Proten/)).toBeInTheDocument();
+
+    await user.type(input, "มีข้อมูลไหนใกล้หมดอายุไหม");
+    await user.click(screen.getByRole("button", { name: /send message/i }));
+    expect(await screen.findByText("Proten expires in 7 days.")).toBeInTheDocument();
+
+    expect(aiChatService.sendMessage).toHaveBeenNthCalledWith(1, "ขอข้อมูลบริษัท Proten", undefined);
+    expect(aiChatService.sendMessage).toHaveBeenNthCalledWith(2, "มีข้อมูลไหนใกล้หมดอายุไหม", {
+      lastSelectedCustomerId: 10,
+      lastSelectedCustomerName: "Proten"
+    });
   });
 
   it("renders the database fallback label", async () => {
