@@ -252,10 +252,10 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
           <div style={{ display: "flex", gap: "8px" }}>
             {(tableType === "profiles" || tableType === "antiviruspricelist") && (
               <button
-                className="ghost-button"
+                className="secondary-button"
                 onClick={() => setIsImportOpen(true)}
                 type="button"
-                style={{ display: "flex", alignItems: "center", gap: "6px", border: "1px solid var(--border-color)", padding: "6px 12px" }}
+                style={{ display: "flex", alignItems: "center", gap: "6px" }}
               >
                 <Upload size={15} />
                 Import

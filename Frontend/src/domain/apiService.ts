@@ -663,8 +663,8 @@ export const apiService = {
     const mappingsJson = JSON.stringify(mappings);
     return `${API_BASE}/import/customers/export-errors?fileId=${encodeURIComponent(fileId)}&mappingsJson=${encodeURIComponent(mappingsJson)}`;
   },
-  async downloadTemplate(type: "manage" | "profile" | "antivirus-price-list"): Promise<void> {
-    const response = await fetch(`${API_BASE}/import/templates/${type}`, {
+  async downloadTemplate(type: "manage" | "profile" | "antivirus-price-list", format: "xlsx" | "csv" = "xlsx"): Promise<void> {
+    const response = await fetch(`${API_BASE}/import/templates/${type}?format=${format}`, {
       method: "GET"
     });
     if (!response.ok) {
@@ -674,7 +674,7 @@ export const apiService = {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${type}-import-template.xlsx`;
+    a.download = `${type}-import-template.${format}`;
     document.body.appendChild(a);
     a.click();
     a.remove();

@@ -34,6 +34,7 @@ public class ImportController : ControllerBase
     private readonly IImportPolicyService _policyService;
     private readonly TelesaleDbContext _db;
     private readonly ILogger<ImportController> _logger;
+    private readonly Microsoft.AspNetCore.Hosting.IWebHostEnvironment _env;
 
     public ImportController(
         IAiExtractionService aiService, 
@@ -42,7 +43,8 @@ public class ImportController : ControllerBase
         IImportColumnMappingService columnMappingService,
         IImportPolicyService policyService,
         TelesaleDbContext db,
-        ILogger<ImportController> logger)
+        ILogger<ImportController> logger,
+        Microsoft.AspNetCore.Hosting.IWebHostEnvironment env)
     {
         _aiService = aiService;
         _validationService = validationService;
@@ -51,11 +53,12 @@ public class ImportController : ControllerBase
         _policyService = policyService;
         _db = db;
         _logger = logger;
+        _env = env;
     }
 
     private string GetTempUploadsPath()
     {
-        var path = Path.Combine(Directory.GetCurrentDirectory(), "TempImports");
+        var path = Path.Combine(_env.ContentRootPath, "TempImports");
         if (!Directory.Exists(path))
         {
             Directory.CreateDirectory(path);
@@ -101,10 +104,12 @@ public class ImportController : ControllerBase
     }
 
     [HttpGet("templates/manage")]
-    public IActionResult DownloadManageTemplate()
+    public IActionResult DownloadManageTemplate([FromQuery] string format = "xlsx")
     {
-        var templateDir = Path.Combine(Directory.GetCurrentDirectory(), "templates");
-        var path = Path.GetFullPath(Path.Combine(templateDir, "manage-import-template.xlsx"));
+        var ext = format.ToLowerInvariant() == "csv" ? ".csv" : ".xlsx";
+        var filename = $"manage-import-template{ext}";
+        var templateDir = Path.Combine(_env.ContentRootPath, "templates");
+        var path = Path.GetFullPath(Path.Combine(templateDir, filename));
         if (!path.StartsWith(templateDir, StringComparison.OrdinalIgnoreCase))
         {
             return BadRequest("Invalid template path.");
@@ -113,14 +118,16 @@ public class ImportController : ControllerBase
         {
             return NotFound(new { message = "Template file not found." });
         }
-        return PhysicalFile(path, GetMimeType(path), "manage-import-template.xlsx");
+        return PhysicalFile(path, GetMimeType(path), filename);
     }
 
     [HttpGet("templates/profile")]
-    public IActionResult DownloadProfileTemplate()
+    public IActionResult DownloadProfileTemplate([FromQuery] string format = "xlsx")
     {
-        var templateDir = Path.Combine(Directory.GetCurrentDirectory(), "templates");
-        var path = Path.GetFullPath(Path.Combine(templateDir, "profile-import-template.xlsx"));
+        var ext = format.ToLowerInvariant() == "csv" ? ".csv" : ".xlsx";
+        var filename = $"profile-import-template{ext}";
+        var templateDir = Path.Combine(_env.ContentRootPath, "templates");
+        var path = Path.GetFullPath(Path.Combine(templateDir, filename));
         if (!path.StartsWith(templateDir, StringComparison.OrdinalIgnoreCase))
         {
             return BadRequest("Invalid template path.");
@@ -129,14 +136,16 @@ public class ImportController : ControllerBase
         {
             return NotFound(new { message = "Template file not found." });
         }
-        return PhysicalFile(path, GetMimeType(path), "profile-import-template.xlsx");
+        return PhysicalFile(path, GetMimeType(path), filename);
     }
 
     [HttpGet("templates/antivirus-price-list")]
-    public IActionResult DownloadAntivirusPriceListTemplate()
+    public IActionResult DownloadAntivirusPriceListTemplate([FromQuery] string format = "xlsx")
     {
-        var templateDir = Path.Combine(Directory.GetCurrentDirectory(), "templates");
-        var path = Path.GetFullPath(Path.Combine(templateDir, "antivirus-price-list-import-template.xlsx"));
+        var ext = format.ToLowerInvariant() == "csv" ? ".csv" : ".xlsx";
+        var filename = $"antivirus-price-list-import-template{ext}";
+        var templateDir = Path.Combine(_env.ContentRootPath, "templates");
+        var path = Path.GetFullPath(Path.Combine(templateDir, filename));
         if (!path.StartsWith(templateDir, StringComparison.OrdinalIgnoreCase))
         {
             return BadRequest("Invalid template path.");
@@ -145,7 +154,7 @@ public class ImportController : ControllerBase
         {
             return NotFound(new { message = "Template file not found." });
         }
-        return PhysicalFile(path, GetMimeType(path), "antivirus-price-list-import-template.xlsx");
+        return PhysicalFile(path, GetMimeType(path), filename);
     }
 
     [HttpPost("manage")]

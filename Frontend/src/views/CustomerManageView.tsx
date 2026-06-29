@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import {
   Users, UserCheck, ShieldCheck, FileText, Search, Plus,
   FileDown, Pencil, Trash2, ArrowLeft, Laptop, Target, Check, AlertCircle, Info,
-  FileSpreadsheet
+  FileSpreadsheet, Upload
 } from "lucide-react";
 import { apiService } from "../domain/apiService";
 import { ImportMasterDataModal } from "../components/ImportMasterDataModal";
@@ -598,27 +598,15 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
             </div>
             <div className="topbar-actions">
               {(isAdmin || isSupervisor) && (
-                <>
-                  <button
-                    className="secondary-button"
-                    onClick={async () => {
-                      try {
-                        await apiService.downloadTemplate("manage");
-                      } catch (err: any) {
-                        showToast(err.message || "Failed to download template.", "error");
-                      }
-                    }}
-                    type="button"
-                    style={{ display: "flex", alignItems: "center", gap: "6px" }}
-                  >
-                    <FileSpreadsheet size={15} />
-                    Template
-                  </button>
-                  <button className="secondary-button" onClick={() => setIsImportModalOpen(true)} type="button">
-                    <FileDown size={15} />
-                    Import
-                  </button>
-                </>
+                <button
+                  className="secondary-button"
+                  onClick={() => setIsImportModalOpen(true)}
+                  type="button"
+                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                >
+                  <Upload size={15} />
+                  Import
+                </button>
               )}
               <button className="primary-button" onClick={() => { setActiveCustomer(null); setIsCustomerDrawerOpen(true); }} type="button">
                 <Plus size={15} />

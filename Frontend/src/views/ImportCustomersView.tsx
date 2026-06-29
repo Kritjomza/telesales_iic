@@ -699,6 +699,14 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
     }
   };
 
+  const currentStep = !previewData
+    ? 1
+    : !hasValidated
+      ? 2
+      : (validationSummary?.error ?? 0) === 0
+        ? 4
+        : 3;
+
   return (
     <div className="workspace-view">
       <header className="topbar">
@@ -711,19 +719,29 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
       <main className="content animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
         <section className="import-step-grid" aria-label="Import workflow steps">
           {[
-            ["1", "Upload", "CSV or XLSX source"],
-            ["2", "Preview", "Map detected columns"],
-            ["3", "Validation", "Scan duplicates and errors"],
-            ["4", "Confirm", "Commit approved rows"]
-          ].map(([index, title, detail]) => (
-            <div className="import-step" key={index}>
-              <span className="import-step-index">{index}</span>
-              <div>
-                <strong>{title}</strong>
-                <span>{detail}</span>
+            [1, "Upload", "CSV or XLSX source"],
+            [2, "Preview", "Map detected columns"],
+            [3, "Validation", "Scan duplicates and errors"],
+            [4, "Confirm", "Commit approved rows"]
+          ].map(([stepNum, title, detail]) => {
+            const stepIndex = stepNum as number;
+            const isActive = currentStep === stepIndex;
+            const isCompleted = currentStep > stepIndex;
+            return (
+              <div 
+                className={`import-step${isActive ? " active" : ""}${isCompleted ? " completed" : ""}`} 
+                key={stepIndex}
+              >
+                <span className="import-step-index">
+                  {isCompleted ? <Check size={14} /> : stepIndex}
+                </span>
+                <div>
+                  <strong>{title}</strong>
+                  <span>{detail as string}</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </section>
         
         {/* Step 1: Upload File & AI Extraction Panels */}
@@ -797,21 +815,38 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
               )}
 
               <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
-                <button
-                  className="ghost-button"
-                  onClick={async () => {
-                    try {
-                      await apiService.downloadTemplate("manage");
-                    } catch (err: any) {
-                      showToast(err.message || "Failed to download template.", "error");
-                    }
-                  }}
-                  type="button"
-                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", border: "1px solid var(--border-color)" }}
-                >
-                  <FileSpreadsheet size={16} />
-                  Download Template
-                </button>
+                <div style={{ display: "flex", gap: "10px", width: "100%" }}>
+                  <button
+                    className="ghost-button"
+                    onClick={async () => {
+                      try {
+                        await apiService.downloadTemplate("manage", "xlsx");
+                      } catch (err: any) {
+                        showToast(err.message || "Failed to download template.", "error");
+                      }
+                    }}
+                    type="button"
+                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", border: "1px solid var(--border-color)" }}
+                  >
+                    <FileSpreadsheet size={16} />
+                    Excel Template
+                  </button>
+                  <button
+                    className="ghost-button"
+                    onClick={async () => {
+                      try {
+                        await apiService.downloadTemplate("manage", "csv");
+                      } catch (err: any) {
+                        showToast(err.message || "Failed to download template.", "error");
+                      }
+                    }}
+                    type="button"
+                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", border: "1px solid var(--border-color)" }}
+                  >
+                    <FileSpreadsheet size={16} />
+                    CSV Template
+                  </button>
+                </div>
                 <button
                   className="primary-button"
                   onClick={handlePreview}
@@ -846,16 +881,7 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
                 value={unstructuredText}
                 onChange={(e) => setUnstructuredText(e.target.value)}
                 rows={4}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "var(--border-radius)",
-                  border: "1px solid var(--border-color)",
-                  fontFamily: "var(--font-family)",
-                  fontSize: "13px",
-                  resize: "none",
-                  background: "var(--bg-active)"
-                }}
+                className="ai-terminal-textarea"
               />
 
               <button
@@ -896,13 +922,7 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
               </div>
               
               <span 
-                className="status-badge" 
-                style={{ 
-                  fontSize: "12px", 
-                  padding: "4px 10px",
-                  background: extractedData.confidence >= 0.7 ? "rgba(34, 197, 94, 0.15)" : "rgba(249, 115, 22, 0.15)",
-                  color: extractedData.confidence >= 0.7 ? "#16a34a" : "#ea580c"
-                }}
+                className={`ai-confidence-badge ${extractedData.confidence >= 0.7 ? "high" : "low"}`}
               >
                 AI Confidence: {Math.round(extractedData.confidence * 100)}%
               </span>
@@ -1115,32 +1135,32 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
 
               {/* Data Format Validation Row */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "16px" }}>
-                <div style={{ padding: "12px", background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "var(--border-radius)", textAlign: "center" }}>
-                  <span style={{ display: "block", fontSize: "20px", fontWeight: "700", color: "var(--text-color)" }}>
+                <div className="metrics-summary-card">
+                  <span className="metrics-summary-card-val">
                     {validationSummary.total}
                   </span>
-                  <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "500" }}>Total Draft Rows</span>
+                  <span className="metrics-summary-card-lbl">Total Draft Rows</span>
                 </div>
                 
-                <div style={{ padding: "12px", background: "var(--bg-card)", border: "1px solid rgba(34, 197, 94, 0.4)", borderRadius: "var(--border-radius)", textAlign: "center" }}>
-                  <span style={{ display: "block", fontSize: "20px", fontWeight: "700", color: "#16a34a" }}>
+                <div className="metrics-summary-card success">
+                  <span className="metrics-summary-card-val">
                     {validationSummary.valid}
                   </span>
-                  <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: "500" }}>Format Valid</span>
+                  <span className="metrics-summary-card-lbl">Format Valid</span>
                 </div>
 
-                <div style={{ padding: "12px", background: "var(--bg-card)", border: "1px solid rgba(249, 115, 22, 0.4)", borderRadius: "var(--border-radius)", textAlign: "center" }}>
-                  <span style={{ display: "block", fontSize: "20px", fontWeight: "700", color: "#ea580c" }}>
+                <div className="metrics-summary-card warning">
+                  <span className="metrics-summary-card-val">
                     {validationSummary.warning}
                   </span>
-                  <span style={{ fontSize: "11px", color: "#ea580c", fontWeight: "500" }}>Format Warnings</span>
+                  <span className="metrics-summary-card-lbl">Format Warnings</span>
                 </div>
 
-                <div style={{ padding: "12px", background: "var(--bg-card)", border: "1px solid rgba(239, 68, 68, 0.4)", borderRadius: "var(--border-radius)", textAlign: "center" }}>
-                  <span style={{ display: "block", fontSize: "20px", fontWeight: "700", color: "#dc2626" }}>
+                <div className="metrics-summary-card danger">
+                  <span className="metrics-summary-card-val">
                     {validationSummary.error}
                   </span>
-                  <span style={{ fontSize: "11px", color: "#dc2626", fontWeight: "500" }}>Format Errors</span>
+                  <span className="metrics-summary-card-lbl">Format Errors</span>
                 </div>
               </div>
             </div>
@@ -1151,25 +1171,25 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
                 DUPLICATE SCAN STATISTICS
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "16px" }}>
-                <div style={{ padding: "12px", background: "var(--bg-card)", border: "1px solid rgba(239, 68, 68, 0.4)", borderRadius: "var(--border-radius)", textAlign: "center" }}>
-                  <span style={{ display: "block", fontSize: "20px", fontWeight: "700", color: "#dc2626" }}>
+                <div className="metrics-summary-card danger">
+                  <span className="metrics-summary-card-val">
                     {validationSummary.duplicateCount}
                   </span>
-                  <span style={{ fontSize: "11px", color: "#dc2626", fontWeight: "500" }}>Duplicates (95%+)</span>
+                  <span className="metrics-summary-card-lbl">Duplicates (95%+)</span>
                 </div>
 
-                <div style={{ padding: "12px", background: "var(--bg-card)", border: "1px solid rgba(249, 115, 22, 0.4)", borderRadius: "var(--border-radius)", textAlign: "center" }}>
-                  <span style={{ display: "block", fontSize: "20px", fontWeight: "700", color: "#ea580c" }}>
+                <div className="metrics-summary-card warning">
+                  <span className="metrics-summary-card-val">
                     {validationSummary.duplicateWarningCount}
                   </span>
-                  <span style={{ fontSize: "11px", color: "#ea580c", fontWeight: "500" }}>Fuzzy Warnings (85-94%)</span>
+                  <span className="metrics-summary-card-lbl">Fuzzy Warnings (85-94%)</span>
                 </div>
 
-                <div style={{ padding: "12px", background: "var(--bg-card)", border: "1px solid rgba(34, 197, 94, 0.4)", borderRadius: "var(--border-radius)", textAlign: "center" }}>
-                  <span style={{ display: "block", fontSize: "20px", fontWeight: "700", color: "#16a34a" }}>
+                <div className="metrics-summary-card success">
+                  <span className="metrics-summary-card-val">
                     {validationSummary.uniqueCount}
                   </span>
-                  <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: "500" }}>Unique Records (&lt;85%)</span>
+                  <span className="metrics-summary-card-lbl">Unique Records (&lt;85%)</span>
                 </div>
               </div>
             </div>
@@ -1212,37 +1232,23 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
               <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: 0 }}>
                 Choose the automation mode. Safest auto-imports unique rows only; Fast mode accepts all valid unique/exact duplicate rows.
               </p>
-              <div style={{ display: "flex", gap: "20px", marginTop: "8px", flexWrap: "wrap" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>
-                  <input
-                    type="radio"
-                    name="importPolicy"
-                    value="Safe"
-                    checked={policy === "Safe"}
-                    onChange={(e) => setPolicy(e.target.value)}
-                  />
-                  Safe Mode
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>
-                  <input
-                    type="radio"
-                    name="importPolicy"
-                    value="Fast"
-                    checked={policy === "Fast"}
-                    onChange={(e) => setPolicy(e.target.value)}
-                  />
-                  Fast Mode
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>
-                  <input
-                    type="radio"
-                    name="importPolicy"
-                    value="Strict"
-                    checked={policy === "Strict"}
-                    onChange={(e) => setPolicy(e.target.value)}
-                  />
-                  Strict Mode
-                </label>
+              <div style={{ marginTop: "8px" }}>
+                <div className="segmented-control">
+                  {[
+                    ["Safe", "Safe Mode"],
+                    ["Fast", "Fast Mode"],
+                    ["Strict", "Strict Mode"]
+                  ].map(([val, label]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      className={`segmented-control-btn${policy === val ? " active" : ""}`}
+                      onClick={() => setPolicy(val)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1311,71 +1317,41 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
 
             {/* Tab Controls */}
             {hasValidated && (
-              <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                <button
-                  onClick={() => setActiveTab("autoReady")}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "20px",
-                    fontSize: "12px",
-                    fontWeight: "700",
-                    background: activeTab === "autoReady" ? "rgba(34, 197, 94, 0.1)" : "transparent",
-                    color: activeTab === "autoReady" ? "#16a34a" : "var(--text-muted)",
-                    border: "none",
-                    cursor: "pointer"
-                  }}
-                  type="button"
-                >
-                  Ready to Import ({activeSummary.autoReadyCount})
-                </button>
-                <button
-                  onClick={() => setActiveTab("needsReview")}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "20px",
-                    fontSize: "12px",
-                    fontWeight: "700",
-                    background: activeTab === "needsReview" ? "rgba(234, 179, 8, 0.1)" : "transparent",
-                    color: activeTab === "needsReview" ? "#ca8a04" : "var(--text-muted)",
-                    border: "none",
-                    cursor: "pointer"
-                  }}
-                  type="button"
-                >
-                  Needs Review ({activeSummary.needsReviewCount})
-                </button>
-                <button
-                  onClick={() => setActiveTab("duplicates")}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "20px",
-                    fontSize: "12px",
-                    fontWeight: "700",
-                    background: activeTab === "duplicates" ? "rgba(239, 68, 68, 0.1)" : "transparent",
-                    color: activeTab === "duplicates" ? "#dc2626" : "var(--text-muted)",
-                    border: "none",
-                    cursor: "pointer"
-                  }}
-                  type="button"
-                >
-                  Duplicates ({activeSummary.duplicateCount})
-                </button>
-                <button
-                  onClick={() => setActiveTab("errors")}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "20px",
-                    fontSize: "12px",
-                    fontWeight: "700",
-                    background: activeTab === "errors" ? "rgba(220, 38, 38, 0.1)" : "transparent",
-                    color: activeTab === "errors" ? "#dc2626" : "var(--text-muted)",
-                    border: "none",
-                    cursor: "pointer"
-                  }}
-                  type="button"
-                >
-                  Errors ({activeSummary.errorCount})
-                </button>
+              <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", flexWrap: "wrap", alignItems: "center" }}>
+                <div className="tech-tabs-bar">
+                  <button
+                    onClick={() => setActiveTab("autoReady")}
+                    className={`tech-tab tab-ready${activeTab === "autoReady" ? " active" : ""}`}
+                    type="button"
+                  >
+                    Ready to Import
+                    <span className="tab-badge">{activeSummary.autoReadyCount}</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("needsReview")}
+                    className={`tech-tab tab-review${activeTab === "needsReview" ? " active" : ""}`}
+                    type="button"
+                  >
+                    Needs Review
+                    <span className="tab-badge">{activeSummary.needsReviewCount}</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("duplicates")}
+                    className={`tech-tab tab-duplicate${activeTab === "duplicates" ? " active" : ""}`}
+                    type="button"
+                  >
+                    Duplicates
+                    <span className="tab-badge">{activeSummary.duplicateCount}</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("errors")}
+                    className={`tech-tab tab-error${activeTab === "errors" ? " active" : ""}`}
+                    type="button"
+                  >
+                    Errors
+                    <span className="tab-badge">{activeSummary.errorCount}</span>
+                  </button>
+                </div>
 
                 {activeTab === "autoReady" && activeSummary.autoReadyCount > 0 && (
                   <button
@@ -1455,11 +1431,11 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
 
                     const renderCell = (fieldKey: string, val: any) => {
                       if (!hasValidated) {
-                        return (val !== undefined && val !== null && val !== "") ? val : <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>-</span>;
+                        return (val !== undefined && val !== null && val !== "") ? val : <span className="empty-cell-placeholder">-</span>;
                       }
 
                       const meta = row.extractionMetadata?.[fieldKey];
-                      const displayVal = (val !== undefined && val !== null && val !== "") ? val : <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>-</span>;
+                      const displayVal = (val !== undefined && val !== null && val !== "") ? val : <span className="empty-cell-placeholder">-</span>;
 
                       if (meta && meta.source === "AiExtraction") {
                         return (
@@ -1467,16 +1443,7 @@ export const ImportCustomersView: React.FC<ImportCustomersViewProps> = ({ showTo
                             <span>{displayVal}</span>
                             <span 
                               title={`AI Extracted (Confidence: ${Math.round(meta.confidence * 100)}%)`}
-                              style={{ 
-                                display: "inline-flex",
-                                alignItems: "center", 
-                                color: "#9333ea", 
-                                background: "rgba(168, 85, 247, 0.1)", 
-                                padding: "2px 4px", 
-                                borderRadius: "4px", 
-                                fontSize: "9px",
-                                fontWeight: "700"
-                              }}
+                              className="ai-extracted-cell-badge"
                             >
                               <Sparkles size={8} style={{ marginRight: "2px" }} />
                               {Math.round(meta.confidence * 100)}%
