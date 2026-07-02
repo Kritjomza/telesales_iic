@@ -7,7 +7,8 @@ import {
 import { apiService } from "../domain/apiService";
 import { ImportMasterDataModal } from "../components/ImportMasterDataModal";
 import { AiChatWidget } from "../components/AiChatWidget";
-import type { Customer, ContactDetail, DetailDevice, DetailProject, User, Category, Competitor } from "../domain/types";
+import { CUSTOMER_CALL_STATUS } from "../domain/types";
+import type { Customer, CustomerCallStatus, ContactDetail, DetailDevice, DetailProject, User, Category, Competitor } from "../domain/types";
 import { Drawer } from "../components/Drawer";
 
 import totalCustomersIcon from "../assets/total_customers.svg";
@@ -38,6 +39,17 @@ type SubView =
   | { type: "projects"; contact: ContactDetail; customer: Customer };
 
 const SEARCH_DEBOUNCE_MS = 350;
+const ADVANCE_CALL_STATUSES: CustomerCallStatus[] = [
+  CUSTOMER_CALL_STATUS.CALLED,
+  CUSTOMER_CALL_STATUS.NOT_CALLED
+];
+type CustomerListFilter = "all" | "incomplete" | "complete" | CustomerCallStatus;
+
+const isCustomerCallStatus = (value: string): value is CustomerCallStatus =>
+  ADVANCE_CALL_STATUSES.includes(value as CustomerCallStatus);
+
+const getCustomerStatusClassName = (status: string) =>
+  status.toLowerCase().replace(/\s+/g, "-");
 
 const missingFieldFilterLabels: Partial<Record<CustomerQuickFilter, string>> = {
   noPhone: missingFieldLabels.phone,
@@ -77,13 +89,16 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
   const [appliedTelesaleFilter, setAppliedTelesaleFilter] = useState("all");
 
   // States for completeness and missing-field filtering
-  const [completenessFilter, setCompletenessFilter] = useState<"all" | "incomplete" | "complete">("all");
+  const [completenessFilter, setCompletenessFilter] = useState<CustomerListFilter>("all");
   const [missingFieldFilter, setMissingFieldFilter] = useState<CustomerQuickFilter | "all">("all");
   const [openPopoverCustomerId, setOpenPopoverCustomerId] = useState<number | null>(null);
 
   // Drawer / Modal triggers
   const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
   const [activeCustomer, setActiveCustomer] = useState<Customer | null>(null); // null means "Add New"
+  const [advanceStatusCustomer, setAdvanceStatusCustomer] = useState<Customer | null>(null);
+  const [isSavingAdvanceStatus, setIsSavingAdvanceStatus] = useState(false);
+  const [advanceStatusError, setAdvanceStatusError] = useState<string | null>(null);
 
 
   // Import flow states
@@ -117,6 +132,12 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     incomplete: 0
   });
 
+  const activeStatusFilter = isCustomerCallStatus(completenessFilter) ? completenessFilter : undefined;
+  const activeCompletenessFilter =
+    completenessFilter === "complete" || completenessFilter === "incomplete"
+      ? completenessFilter
+      : "all";
+
   const fetchCustomers = useCallback(async (
     currentPage: number,
     currentPageSize: number,
@@ -125,7 +146,8 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     saleFilter: string,
     teleFilter: string,
     completenessVal?: string,
-    missingFieldVal?: string
+    missingFieldVal?: string,
+    statusVal?: CustomerCallStatus
   ) => {
     const requestId = customerRequestSeq.current + 1;
     customerRequestSeq.current = requestId;
@@ -140,7 +162,8 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         saleId: saleFilter,
         telesaleId: teleFilter,
         completeness: completenessVal,
-        missingField: missingFieldVal
+        missingField: missingFieldVal,
+        status: statusVal
       });
 
       if (requestId === customerRequestSeq.current) {
@@ -181,10 +204,11 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
       appliedBusinessType,
       appliedSaleFilter,
       appliedTelesaleFilter,
-      completenessFilter,
-      missingFieldFilter
+      activeCompletenessFilter,
+      missingFieldFilter,
+      activeStatusFilter
     );
-  }, [fetchCustomers, page, pageSize, appliedQuery, appliedBusinessType, appliedSaleFilter, appliedTelesaleFilter, completenessFilter, missingFieldFilter]);
+  }, [fetchCustomers, page, pageSize, appliedQuery, appliedBusinessType, appliedSaleFilter, appliedTelesaleFilter, activeCompletenessFilter, missingFieldFilter, activeStatusFilter]);
 
   const loadInitialData = async () => {
     let shouldLoadSupportingData = false;
@@ -264,8 +288,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         appliedBusinessType,
         appliedSaleFilter,
         appliedTelesaleFilter,
-        completenessFilter,
-        missingFieldFilter
+        activeCompletenessFilter,
+        missingFieldFilter,
+        activeStatusFilter
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -276,8 +301,9 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     appliedBusinessType,
     appliedSaleFilter,
     appliedTelesaleFilter,
-    completenessFilter,
+    activeCompletenessFilter,
     missingFieldFilter,
+    activeStatusFilter,
     subView.type
   ]);
 
@@ -310,9 +336,11 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         return matchQuery && matchBus;
       });
 
-      // Apply completeness filtering client-side
-      if (completenessFilter !== "all") {
-        list = list.filter(c => customerMatchesQuickFilter(c, completenessFilter));
+      if (activeCompletenessFilter !== "all") {
+        list = list.filter(c => customerMatchesQuickFilter(c, activeCompletenessFilter));
+      }
+      if (activeStatusFilter) {
+        list = list.filter(c => c.status === activeStatusFilter);
       }
       if (missingFieldFilter !== "all") {
         list = list.filter(c => customerMatchesQuickFilter(c, missingFieldFilter));
@@ -327,7 +355,8 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     appliedSaleFilter,
     appliedTelesaleFilter,
     backendMetrics,
-    completenessFilter,
+    activeCompletenessFilter,
+    activeStatusFilter,
     missingFieldFilter
   ]);
 
@@ -335,14 +364,17 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     const items: string[] = [];
     if (appliedQuery.trim()) items.push(`Search: ${appliedQuery.trim()}`);
     if (appliedBusinessType) items.push(`Business: ${appliedBusinessType}`);
-    if (completenessFilter !== "all") {
-      items.push(`Completeness: ${completenessFilter === "complete" ? "Complete" : "Incomplete"}`);
+    if (activeCompletenessFilter !== "all") {
+      items.push(`Completeness: ${activeCompletenessFilter === "complete" ? "Complete" : "Incomplete"}`);
+    }
+    if (activeStatusFilter) {
+      items.push(`Status: ${activeStatusFilter}`);
     }
     if (missingFieldFilter !== "all") {
       items.push(`Missing: ${missingFieldFilterLabels[missingFieldFilter] || missingFieldFilter}`);
     }
     return items;
-  }, [appliedQuery, appliedBusinessType, completenessFilter, missingFieldFilter]);
+  }, [appliedQuery, appliedBusinessType, activeCompletenessFilter, activeStatusFilter, missingFieldFilter]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -380,7 +412,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
       capital: formData.get("capital") as string,
       bt_type: formData.get("bt_type") as string,
       start_dt: (formData.get("start_dt") as string) || null,
-      status: (formData.get("status") as string) || "New",
+      status: (formData.get("status") as CustomerCallStatus) || CUSTOMER_CALL_STATUS.NOT_CALLED,
       is_active: formData.get("is_active") === "true",
     };
 
@@ -429,7 +461,66 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     }
   };
 
+  const openAdvance = async (customer: Customer) => {
+    setIsLoading(true);
+    try {
+      const fetchedContacts = await apiService.getContactDetails(customer.id);
+      setContacts(fetchedContacts);
+      setSubView({ type: "advance-data", customer });
+    } catch (err) {
+      showToast("Failed to fetch contact details", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  const handleAdvanceClick = (customer: Customer) => {
+    setAdvanceStatusCustomer(customer);
+    setAdvanceStatusError(null);
+  };
+
+  const closeAdvanceStatusModal = () => {
+    if (isSavingAdvanceStatus) return;
+    setAdvanceStatusCustomer(null);
+    setAdvanceStatusError(null);
+  };
+
+  const handleAdvanceStatusConfirm = async (status: CustomerCallStatus) => {
+    if (!advanceStatusCustomer || isSavingAdvanceStatus || !ADVANCE_CALL_STATUSES.includes(status)) return;
+
+    setIsSavingAdvanceStatus(true);
+    setAdvanceStatusError(null);
+    try {
+      const updatedCustomer = await apiService.updateCustomerCallStatus(advanceStatusCustomer.id, status);
+      const customerForAdvance = {
+        ...advanceStatusCustomer,
+        ...updatedCustomer,
+        status: updatedCustomer.status || status
+      };
+      setCustomers(prev => prev.map(customer => (
+        customer.id === customerForAdvance.id ? { ...customer, status: customerForAdvance.status } : customer
+      )));
+      setAdvanceStatusCustomer(null);
+      await openAdvance(customerForAdvance);
+    } catch (err: any) {
+      setAdvanceStatusError(err?.message || "Failed to update customer call status.");
+    } finally {
+      setIsSavingAdvanceStatus(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!advanceStatusCustomer) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isSavingAdvanceStatus) {
+        closeAdvanceStatusModal();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [advanceStatusCustomer, isSavingAdvanceStatus]);
 
   // Actions: Contact CRUD
   const openContactDrawer = (contact: ContactDetail | null) => {
@@ -726,16 +817,19 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                     {[
                       { id: "all", label: "All" },
                       { id: "incomplete", label: "Incomplete" },
-                      { id: "complete", label: "Complete" }
+                      { id: "complete", label: "Complete" },
+                      { id: CUSTOMER_CALL_STATUS.CALLED, label: CUSTOMER_CALL_STATUS.CALLED },
+                      { id: CUSTOMER_CALL_STATUS.NOT_CALLED, label: CUSTOMER_CALL_STATUS.NOT_CALLED }
                     ].map(opt => (
                       <button
                         key={opt.id}
                         type="button"
                         className={`control-item ${completenessFilter === opt.id ? "active" : ""}`}
+                        aria-label={`Filter ${opt.label}`}
                         onClick={() => {
-                          setCompletenessFilter(opt.id as any);
+                          setCompletenessFilter(opt.id as CustomerListFilter);
                           setPage(1);
-                          if (opt.id === "complete" || opt.id === "all") {
+                          if (opt.id !== "incomplete") {
                             setMissingFieldFilter("all");
                           }
                         }}
@@ -835,7 +929,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                           </td>
                           <td>{c.start_dt || "-"}</td>
                           <td>
-                            <span className={`status-badge ${c.is_active ? c.status.toLowerCase() : "neutral"}`}>
+                            <span className={`status-badge ${c.is_active ? getCustomerStatusClassName(c.status) : "neutral"}`}>
                               {c.is_active ? c.status : "Inactive"}
                             </span>
                           </td>
@@ -912,27 +1006,14 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                           </td>
                           <td style={{ textAlign: "right" }}>
                             <div className="row-actions">
-                              {(c.status === "Assigned" || c.status === "REPLACE" || c.status === "Booking" || c.status === "Win" || c.status === "Sent" || c.status === "Wait") && (
-                                <button
-                                  className="action-pill blue"
-                                  onClick={async () => {
-                                    setIsLoading(true);
-                                    try {
-                                      const fetchedContacts = await apiService.getContactDetails(c.id);
-                                      setContacts(fetchedContacts);
-                                      setSubView({ type: "advance-data", customer: c });
-                                    } catch (err) {
-                                      showToast("Failed to fetch contact details", "error");
-                                    } finally {
-                                      setIsLoading(false);
-                                    }
-                                  }}
-                                  aria-label={`Open advance data for ${c.name}`}
-                                  type="button"
-                                >
-                                  Advance
-                                </button>
-                              )}
+                              <button
+                                className="action-pill blue"
+                                onClick={() => handleAdvanceClick(c)}
+                                aria-label={`Open advance data for ${c.name}`}
+                                type="button"
+                              >
+                                Advance
+                              </button>
                               <button
                                 className="edit-btn"
                                 onClick={() => { setActiveCustomer(c); setIsCustomerDrawerOpen(true); }}
@@ -1011,7 +1092,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                 <div><span>Address:</span> {subView.customer.address}</div>
                 <div><span>Business Type:</span> {subView.customer.bt_type}</div>
                 <div><span>Capital:</span> {subView.customer.capital || "-"} THB</div>
-                <div><span>Status:</span> <span className={`status-badge ${subView.customer.status.toLowerCase()}`}>{subView.customer.status}</span></div>
+                <div><span>Status:</span> <span className={`status-badge ${getCustomerStatusClassName(subView.customer.status)}`}>{subView.customer.status}</span></div>
               </div>
             </div>
 
@@ -1299,6 +1380,62 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
 
       {/* DRAWERS & MODALS */}
 
+      {advanceStatusCustomer && (
+        <div
+          className="modal-overlay"
+          onClick={closeAdvanceStatusModal}
+        >
+          <div
+            className="modal-content-box advance-status-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="advance-status-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="modal-header">
+              <h3 id="advance-status-modal-title">ยืนยันสถานะการโทร</h3>
+            </header>
+            <div className="modal-body">
+              <p className="advance-status-message">
+                ต้องการอัปเดตสถานะการโทรของลูกค้ารายนี้หรือไม่?
+              </p>
+              {advanceStatusError && (
+                <div className="advance-status-error" role="alert">
+                  <AlertCircle size={16} />
+                  <span>{advanceStatusError}</span>
+                </div>
+              )}
+              <div className="advance-status-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => handleAdvanceStatusConfirm(CUSTOMER_CALL_STATUS.CALLED)}
+                  disabled={isSavingAdvanceStatus}
+                >
+                  {isSavingAdvanceStatus ? "Saving..." : CUSTOMER_CALL_STATUS.CALLED}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => handleAdvanceStatusConfirm(CUSTOMER_CALL_STATUS.NOT_CALLED)}
+                  disabled={isSavingAdvanceStatus}
+                >
+                  {isSavingAdvanceStatus ? "Saving..." : CUSTOMER_CALL_STATUS.NOT_CALLED}
+                </button>
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={closeAdvanceStatusModal}
+                  disabled={isSavingAdvanceStatus}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. Customer Add/Edit Drawer */}
       <Drawer
         isOpen={isCustomerDrawerOpen}
@@ -1367,16 +1504,10 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                 <select
                   id="status"
                   name="status"
-                  defaultValue={activeCustomer?.status || "New"}
+                  defaultValue={activeCustomer?.status === CUSTOMER_CALL_STATUS.CALLED ? CUSTOMER_CALL_STATUS.CALLED : CUSTOMER_CALL_STATUS.NOT_CALLED}
                 >
-                  <option value="New">New</option>
-                  <option value="Assigned">Assigned</option>
-                  <option value="Booking">Booking</option>
-                  <option value="Wait">Wait</option>
-                  <option value="Sent">Sent</option>
-                  <option value="Win">Win</option>
-                  <option value="Lost">Lost</option>
-                  <option value="REPLACE">REPLACE</option>
+                  <option value={CUSTOMER_CALL_STATUS.NOT_CALLED}>{CUSTOMER_CALL_STATUS.NOT_CALLED}</option>
+                  <option value={CUSTOMER_CALL_STATUS.CALLED}>{CUSTOMER_CALL_STATUS.CALLED}</option>
                 </select>
               </div>
             </div>

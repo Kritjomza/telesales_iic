@@ -72,6 +72,57 @@ describe("apiService customer create contract", () => {
   });
 });
 
+describe("apiService customer call status contract", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify({ id: 7, status: "Called" }))
+    }));
+  });
+
+  it("updates only customer call status through the dedicated endpoint", async () => {
+    await apiService.updateCustomerCallStatus(7, "Called");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/customers/7/status",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ status: "Called" })
+      })
+    );
+  });
+});
+
+describe("apiService customer status filter contract", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify({
+        items: [],
+        totalCount: 0,
+        page: 1,
+        pageSize: 25,
+        totalPages: 0
+      }))
+    }));
+  });
+
+  it("sends supported customer status as a paginated filter", async () => {
+    await apiService.getCustomersPaginated({
+      page: 1,
+      pageSize: 25,
+      status: "Called"
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/customers?page=1&pageSize=25&status=Called",
+      expect.objectContaining({ credentials: "same-origin" })
+    );
+  });
+});
+
 describe("apiService manual import contract", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({

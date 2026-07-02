@@ -12,16 +12,31 @@ namespace Telesale.Api.Tests;
 public class StatusPolicyTests
 {
     [Fact]
+    public void CustomerStatuses_OnlyAllowCallStatusValues()
+    {
+        Assert.Equal(new[] { "Called", "Not Called" }, StatusPolicy.CustomerStatuses);
+        Assert.True(StatusPolicy.IsValidCustomerStatus("Called"));
+        Assert.True(StatusPolicy.IsValidCustomerStatus("Not Called"));
+        Assert.False(StatusPolicy.IsValidCustomerStatus("โทรแล้ว"));
+        Assert.False(StatusPolicy.IsValidCustomerStatus("ยังไม่โทร"));
+        Assert.False(StatusPolicy.IsValidCustomerStatus("Assigned"));
+        Assert.False(StatusPolicy.IsValidCustomerStatus("New"));
+        Assert.False(StatusPolicy.IsValidCustomerStatus("Win"));
+    }
+
+    [Fact]
     public void TestCanonicalStatusSets()
     {
         // Customer
-        Assert.True(StatusPolicy.IsValidCustomerStatus("New"));
+        Assert.False(StatusPolicy.IsValidCustomerStatus("New"));
         Assert.False(StatusPolicy.IsValidCustomerStatus("Assigned"));
         Assert.False(StatusPolicy.IsValidCustomerStatus("Booking"));
-        Assert.True(StatusPolicy.IsValidCustomerStatus("Wait"));
-        Assert.True(StatusPolicy.IsValidCustomerStatus("Sent"));
-        Assert.True(StatusPolicy.IsValidCustomerStatus("Win"));
-        Assert.True(StatusPolicy.IsValidCustomerStatus("Lost"));
+        Assert.False(StatusPolicy.IsValidCustomerStatus("Wait"));
+        Assert.False(StatusPolicy.IsValidCustomerStatus("Sent"));
+        Assert.False(StatusPolicy.IsValidCustomerStatus("Win"));
+        Assert.False(StatusPolicy.IsValidCustomerStatus("Lost"));
+        Assert.True(StatusPolicy.IsValidCustomerStatus("Called"));
+        Assert.True(StatusPolicy.IsValidCustomerStatus("Not Called"));
         Assert.False(StatusPolicy.IsValidCustomerStatus("REPLACE"));
         Assert.False(StatusPolicy.IsValidCustomerStatus("InvalidStatus"));
 

@@ -17,7 +17,7 @@ const baseCustomer = {
   postal_code: "10500",
   telesale_id: null,
   sale_id: null,
-  status: "New",
+  status: "Not Called",
   is_active: true,
   start_dt: null,
   bt_type: "Technology",

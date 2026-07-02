@@ -9,6 +9,13 @@ export interface User {
   linetoken?: string;
 }
 
+export const CUSTOMER_CALL_STATUS = {
+  CALLED: "Called",
+  NOT_CALLED: "Not Called"
+} as const;
+
+export type CustomerCallStatus = typeof CUSTOMER_CALL_STATUS[keyof typeof CUSTOMER_CALL_STATUS];
+
 export interface Customer {
   id: number;
   name: string;

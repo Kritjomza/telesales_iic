@@ -8,7 +8,7 @@ public static class StatusPolicy
 {
     public static readonly HashSet<string> CustomerStatuses = new(StringComparer.Ordinal)
     {
-        "New", "Wait", "Sent", "Win", "Lost"
+        "Called", "Not Called"
     };
 
     public static readonly HashSet<string> DeviceStatuses = new(StringComparer.Ordinal)

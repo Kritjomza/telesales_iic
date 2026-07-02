@@ -195,6 +195,98 @@ public class PermissionTests
     }
 
     [Fact]
+    public async Task UpdateCustomerStatus_AllowsOnlyCallStatusAndUpdatesNoOtherField()
+    {
+        using var db = GetInMemoryDbContext();
+        var superUser = CreateUserPrincipal(6, AppRoles.SuperAdmin);
+        var c = new customer
+        {
+            id = 1,
+            name = "Test",
+            address = "Original Address",
+            owner_id = 10,
+            status = "Not Called",
+            create_type = "Key",
+            is_active = true
+        };
+        db.customers.Add(c);
+        await db.SaveChangesAsync();
+
+        var controller = new CustomersController(db)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = superUser }
+            }
+        };
+
+        var result = await controller.UpdateCustomerStatus(1, new CustomerStatusUpdateDto { status = "Called" }, default);
+
+        Assert.IsType<OkObjectResult>(result);
+        var saved = await db.customers.FindAsync((uint)1);
+        Assert.NotNull(saved);
+        Assert.Equal("Called", saved!.status);
+        Assert.Equal("Original Address", saved.address);
+    }
+
+    [Fact]
+    public async Task UpdateCustomerStatus_RejectsInvalidStatus()
+    {
+        using var db = GetInMemoryDbContext();
+        var superUser = CreateUserPrincipal(6, AppRoles.SuperAdmin);
+        var c = new customer { id = 1, name = "Test", owner_id = 10, status = "Not Called", create_type = "Key", is_active = true };
+        db.customers.Add(c);
+        await db.SaveChangesAsync();
+
+        var controller = new CustomersController(db)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = superUser }
+            }
+        };
+
+        var result = await controller.UpdateCustomerStatus(1, new CustomerStatusUpdateDto { status = "Win" }, default);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("Invalid customer status", badRequest.Value?.ToString());
+        var saved = await db.customers.FindAsync((uint)1);
+        Assert.Equal("Not Called", saved!.status);
+    }
+
+    [Fact]
+    public async Task GetCustomers_RejectsInvalidStatusFilter()
+    {
+        using var db = GetInMemoryDbContext();
+        var superUser = CreateUserPrincipal(6, AppRoles.SuperAdmin);
+        db.customers.Add(new customer { id = 1, name = "Test", owner_id = 10, status = "Not Called", create_type = "Key", is_active = true });
+        await db.SaveChangesAsync();
+
+        var controller = new CustomersController(db)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = superUser }
+            }
+        };
+
+        var result = await controller.GetCustomers(
+            page: 1,
+            pageSize: 25,
+            search: null,
+            completeness: null,
+            missingField: null,
+            cancellationToken: default,
+            businessType: null,
+            saleId: null,
+            telesaleId: null,
+            status: "Win");
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("Invalid customer status", badRequest.Value?.ToString());
+    }
+
+    [Fact]
     public async Task TestSuperAdminDeleteCustomerWithChildren_CascadeDeletes()
     {
         using var db = GetInMemoryDbContext();

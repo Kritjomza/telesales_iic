@@ -26,7 +26,7 @@ describe("ATS React workspace", () => {
               bt_type: "Commercial",
               sale_id: 1,
               telesale_id: 2,
-              status: "Assigned",
+              status: "Called",
               renewalDays: 45,
               hasCostSheet: false,
               is_active: true,
@@ -43,7 +43,7 @@ describe("ATS React workspace", () => {
               bt_type: "Government",
               sale_id: null,
               telesale_id: null,
-              status: "New",
+              status: "Not Called",
               renewalDays: 7,
               hasCostSheet: false,
               is_active: true,
@@ -60,7 +60,7 @@ describe("ATS React workspace", () => {
               bt_type: "Commercial",
               sale_id: 3,
               telesale_id: 4,
-              status: "Sent",
+              status: "Called",
               renewalDays: 12,
               hasCostSheet: true,
               is_active: true,
@@ -150,6 +150,182 @@ describe("ATS React workspace", () => {
     expect(
       screen.getByRole("button", { name: /open advance data for apex manufacturing/i })
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /open advance data for siam healthcare/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /open advance data for arrow retail/i })
+    ).toBeInTheDocument();
+  });
+
+  it("requires call status confirmation before opening advance data", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes("/api/auth/me")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify({
+            id: 1,
+            username: "AR9999",
+            name: "Narin Admin",
+            email: "narin@iic.co.th",
+            roles: "Super Admin",
+            avatar: "NA"
+          }))
+        });
+      }
+      if (url.includes("/api/customers/1/status")) {
+        expect(options?.method).toBe("PATCH");
+        expect(options?.body).toBe(JSON.stringify({ status: "Called" }));
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify({
+            id: 1,
+            name: "Apex Manufacturing",
+            address: "Bangkok",
+            bt_type: "Commercial",
+            sale_id: 1,
+            telesale_id: 2,
+            status: "Called",
+            renewalDays: 45,
+            hasCostSheet: false,
+            is_active: true,
+            start_dt: "2026-06-01"
+          }))
+        });
+      }
+      if (url.includes("/api/customers/1/contacts")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([]))
+        });
+      }
+      if (url.includes("/api/customers")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([
+            {
+              id: 1,
+              name: "Apex Manufacturing",
+              address: "Bangkok",
+              bt_type: "Commercial",
+              sale_id: 1,
+              telesale_id: 2,
+              status: "Not Called",
+              renewalDays: 45,
+              hasCostSheet: false,
+              is_active: true,
+              start_dt: "2026-06-01"
+            }
+          ]))
+        });
+      }
+      if (url.includes("/api/masterdata/business-types")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([{ id: 1, type: "Commercial", dtl: "Commercial Business" }]))
+        });
+      }
+      if (url.includes("/api/masterdata/competitors")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([]))
+        });
+      }
+      return Promise.resolve({ ok: true, text: () => Promise.resolve("[]") });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    await screen.findByText("Apex Manufacturing");
+    await user.click(screen.getByRole("button", { name: /open advance data for apex manufacturing/i }));
+
+    expect(screen.getByRole("dialog", { name: "ยืนยันสถานะการโทร" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Apex Manufacturing" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Called" }));
+
+    await screen.findByRole("heading", { name: "Apex Manufacturing" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/customers/1/status",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ status: "Called" })
+      })
+    );
+  });
+
+  it("keeps advance closed when call status update fails", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/auth/me")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify({
+            id: 1,
+            username: "AR9999",
+            name: "Narin Admin",
+            email: "narin@iic.co.th",
+            roles: "Super Admin",
+            avatar: "NA"
+          }))
+        });
+      }
+      if (url.includes("/api/customers/1/status")) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          text: () => Promise.resolve(JSON.stringify({ message: "Invalid customer status" }))
+        });
+      }
+      if (url.includes("/api/customers/1/contacts")) {
+        throw new Error("contacts should not be fetched after failed status update");
+      }
+      if (url.includes("/api/customers")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([
+            {
+              id: 1,
+              name: "Apex Manufacturing",
+              address: "Bangkok",
+              bt_type: "Commercial",
+              sale_id: 1,
+              telesale_id: 2,
+              status: "Not Called",
+              renewalDays: 45,
+              hasCostSheet: false,
+              is_active: true,
+              start_dt: "2026-06-01"
+            }
+          ]))
+        });
+      }
+      if (url.includes("/api/masterdata/business-types")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([{ id: 1, type: "Commercial", dtl: "Commercial Business" }]))
+        });
+      }
+      if (url.includes("/api/masterdata/competitors")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([]))
+        });
+      }
+      return Promise.resolve({ ok: true, text: () => Promise.resolve("[]") });
+    }));
+
+    render(<App />);
+
+    await screen.findByText("Apex Manufacturing");
+    await user.click(screen.getByRole("button", { name: /open advance data for apex manufacturing/i }));
+    await user.click(screen.getByRole("button", { name: "Not Called" }));
+
+    expect(await screen.findByText("Invalid customer status")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Apex Manufacturing" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "ยืนยันสถานะการโทร" })).toBeInTheDocument();
   });
 
   it("renders customers when optional lookup data fails to load", async () => {
@@ -178,7 +354,7 @@ describe("ATS React workspace", () => {
               bt_type: "Commercial",
               sale_id: null,
               telesale_id: null,
-              status: "New",
+              status: "Not Called",
               renewalDays: 45,
               hasCostSheet: false,
               is_active: true,
@@ -319,9 +495,11 @@ describe("ATS React workspace", () => {
 
     // 1. Verify filter elements are in the document
     expect(screen.getByText("Completeness:")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^all$/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^incomplete$/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^complete$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^filter all$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^filter incomplete$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^filter complete$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^filter called$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^filter not called$/i })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: /filter by missing field/i })).toBeInTheDocument();
 
     // 2. Verify status badge is displayed in each row
@@ -342,10 +520,79 @@ describe("ATS React workspace", () => {
     expect(screen.queryByText("Address")).not.toBeInTheDocument();
 
     // 4. Click the "Complete" filter pill
-    const completePill = screen.getByRole("button", { name: /^complete$/i });
+    const completePill = screen.getByRole("button", { name: /^filter complete$/i });
     await user.click(completePill);
 
     // Since all three mock customers are incomplete, the table should show No customers found.
     expect(screen.getByText("No customers found.")).toBeInTheDocument();
+  });
+
+  it("filters customers by call status chip through the customer query", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/auth/me")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify({
+            id: 1,
+            username: "AR9999",
+            name: "Narin Admin",
+            email: "narin@iic.co.th",
+            roles: "Super Admin",
+            avatar: "NA"
+          }))
+        });
+      }
+      if (url.includes("/api/customers")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify({
+            items: [
+              {
+                id: 1,
+                name: "Apex Manufacturing",
+                address: "Bangkok",
+                bt_type: "Commercial",
+                sale_id: 1,
+                telesale_id: 2,
+                status: "Called",
+                renewalDays: 45,
+                hasCostSheet: false,
+                is_active: true,
+                start_dt: "2026-06-01"
+              }
+            ],
+            totalCount: 1,
+            page: 1,
+            pageSize: 25,
+            totalPages: 1
+          }))
+        });
+      }
+      if (url.includes("/api/masterdata/business-types")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([{ id: 1, type: "Commercial", dtl: "Commercial Business" }]))
+        });
+      }
+      if (url.includes("/api/masterdata/competitors")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([]))
+        });
+      }
+      return Promise.resolve({ ok: true, text: () => Promise.resolve("[]") });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    await screen.findByText("Apex Manufacturing");
+    await user.click(screen.getByRole("button", { name: /^filter called$/i }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/customers?page=1&pageSize=25&status=Called",
+      expect.objectContaining({ credentials: "same-origin" })
+    );
   });
 });

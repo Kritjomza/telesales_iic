@@ -1,4 +1,4 @@
-export const CustomerStatuses = ["New", "Wait", "Sent", "Win", "Lost"] as const;
+export const CustomerStatuses = ["Called", "Not Called"] as const;
 export type CustomerStatus = typeof CustomerStatuses[number];
 
 export const DeviceStatuses = ["New", "Win", "Lost"] as const;

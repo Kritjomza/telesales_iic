@@ -13,7 +13,7 @@ const customers: CustomerRecord[] = [
     businessType: "Commercial",
     sale: "Narin",
     telesale: "May",
-    status: "Assigned",
+    status: "Called",
     renewalDays: 45,
     hasCostSheet: false,
     updatedAt: "2026-06-01"
@@ -25,7 +25,7 @@ const customers: CustomerRecord[] = [
     businessType: "Government",
     sale: null,
     telesale: null,
-    status: "New",
+    status: "Not Called",
     renewalDays: 7,
     hasCostSheet: false,
     updatedAt: "2026-06-03"
@@ -37,7 +37,7 @@ const customers: CustomerRecord[] = [
     businessType: "Commercial",
     sale: "Ploy",
     telesale: "June",
-    status: "Sent",
+    status: "Called",
     renewalDays: 12,
     hasCostSheet: true,
     updatedAt: "2026-06-04"

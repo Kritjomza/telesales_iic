@@ -1,4 +1,6 @@
-export type CustomerStatus = "New" | "Assigned" | "Booking" | "Wait" | "Sent" | "Win" | "Lost";
+import type { CustomerCallStatus } from "./types";
+
+export type CustomerStatus = CustomerCallStatus;
 
 export type CustomerRecord = {
   id: number;

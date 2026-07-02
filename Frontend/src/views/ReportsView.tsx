@@ -2,19 +2,22 @@ import React, { useState, useEffect, useMemo } from "react";
 import { apiService } from "../domain/apiService";
 import type { Customer, User } from "../domain/types";
 import {
-  Activity,
   AlertTriangle,
   BarChart3,
   Calendar,
   ClipboardList,
   FileText,
   RefreshCw,
-  ShieldCheck,
-  Users
+  ShieldCheck
 } from "lucide-react";
 import { ForbiddenView } from "./ForbiddenView";
 
-type ReportTab = "operation" | "performance" | "renewal" | "project-detail";
+export type ReportTab = "operation" | "renewal" | "project-detail";
+
+type ReportsViewProps = {
+  activeTab?: ReportTab;
+  onTabChange?: (tab: ReportTab) => void;
+};
 
 type DistributionItem = {
   label: string;
@@ -67,18 +70,25 @@ const ReportDistribution: React.FC<{ title: string; items: DistributionItem[]; e
   );
 };
 
-export const ReportsView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<ReportTab>("operation");
+export const ReportsView: React.FC<ReportsViewProps> = ({ activeTab: controlledActiveTab, onTabChange }) => {
+  const [internalActiveTab, setInternalActiveTab] = useState<ReportTab>("operation");
+  const activeTab = controlledActiveTab ?? internalActiveTab;
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [projectDetailSummary, setProjectDetailSummary] = useState<any[]>([]);
-  const [agentPerformance, setAgentPerformance] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isForbidden, setIsForbidden] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Renewal filter
   const [renewalFilterDays, setRenewalFilterDays] = useState(30);
+
+  const setActiveReportTab = (tab: ReportTab) => {
+    if (controlledActiveTab === undefined) {
+      setInternalActiveTab(tab);
+    }
+    onTabChange?.(tab);
+  };
 
   const loadData = async () => {
     try {
@@ -93,7 +103,6 @@ export const ReportsView: React.FC = () => {
       setCustomers(custs);
       setUsers(uList);
       setProjectDetailSummary(reportData.projectLedger || []);
-      setAgentPerformance(reportData.agentPerformance || []);
     } catch (err: any) {
       if (err.message?.includes("403") || err.message?.includes("Forbidden")) {
         setIsForbidden(true);
@@ -204,7 +213,7 @@ export const ReportsView: React.FC = () => {
         <div>
           <p>Report / Intelligence</p>
           <h1>System Reports</h1>
-          <span>Operational visibility across customers, renewals, performance, and project ledger data.</span>
+          <span>Operational visibility across customers, renewals, and project ledger data.</span>
         </div>
       </header>
 
@@ -212,7 +221,7 @@ export const ReportsView: React.FC = () => {
         <div className="reports-tab-nav" role="tablist" aria-label="Report sections">
           <button
             className={`report-tab-btn ${activeTab === "operation" ? "active" : ""}`}
-            onClick={() => setActiveTab("operation")}
+            onClick={() => setActiveReportTab("operation")}
             type="button"
             role="tab"
             aria-selected={activeTab === "operation"}
@@ -221,18 +230,8 @@ export const ReportsView: React.FC = () => {
             Operation
           </button>
           <button
-            className={`report-tab-btn ${activeTab === "performance" ? "active" : ""}`}
-            onClick={() => setActiveTab("performance")}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "performance"}
-          >
-            <Activity size={15} />
-            Performance
-          </button>
-          <button
             className={`report-tab-btn ${activeTab === "renewal" ? "active" : ""}`}
-            onClick={() => setActiveTab("renewal")}
+            onClick={() => setActiveReportTab("renewal")}
             type="button"
             role="tab"
             aria-selected={activeTab === "renewal"}
@@ -242,7 +241,7 @@ export const ReportsView: React.FC = () => {
           </button>
           <button
             className={`report-tab-btn ${activeTab === "project-detail" ? "active" : ""}`}
-            onClick={() => setActiveTab("project-detail")}
+            onClick={() => setActiveReportTab("project-detail")}
             type="button"
             role="tab"
             aria-selected={activeTab === "project-detail"}
@@ -356,58 +355,6 @@ export const ReportsView: React.FC = () => {
                               <ClipboardList size={18} />
                               <strong>No operation records</strong>
                               <span>No customers were returned for this report.</span>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            )}
-
-            {activeTab === "performance" && (
-              <section className="report-panel animate-fade-in" role="tabpanel">
-                <div className="report-panel-header">
-                  <div>
-                    <h2>Performance Report</h2>
-                    <p>Agent performance records returned by the existing report endpoint.</p>
-                  </div>
-                  <span className="report-count-pill">{formatCount(agentPerformance.length)} records</span>
-                </div>
-                <div className="table-wrap report-table-wrap">
-                  <table className="corporate-table report-table" aria-label="Agent performance report table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: "64px" }}>No.</th>
-                        <th>Agent</th>
-                        <th>Role</th>
-                        <th className="numeric-cell">Assigned</th>
-                        <th className="numeric-cell">Completed</th>
-                        <th className="numeric-cell">Win</th>
-                        <th className="numeric-cell">Lost</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {agentPerformance.length > 0 ? (
-                        agentPerformance.map((item, index) => (
-                          <tr key={item.id || item.userId || item.name || index}>
-                            <td className="numeric-cell">{index + 1}</td>
-                            <td><strong>{item.name || item.agentName || item.username || "-"}</strong></td>
-                            <td>{item.role || item.roles || "-"}</td>
-                            <td className="numeric-cell">{item.assigned ?? item.totalAssigned ?? item.total ?? "-"}</td>
-                            <td className="numeric-cell">{item.completed ?? item.closed ?? item.done ?? "-"}</td>
-                            <td className="numeric-cell">{item.win ?? item.won ?? item.success ?? "-"}</td>
-                            <td className="numeric-cell">{item.lost ?? item.rejected ?? "-"}</td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={7}>
-                            <div className="report-empty-state compact">
-                              <Users size={18} />
-                              <strong>No performance rows</strong>
-                              <span>The report endpoint did not return agent performance data.</span>
                             </div>
                           </td>
                         </tr>

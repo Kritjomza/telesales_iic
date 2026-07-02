@@ -11,7 +11,7 @@ import {
 import { Toast, type ToastItem } from "./components/Toast";
 import { CustomerManageView } from "./views/CustomerManageView";
 import { CostSheetView } from "./views/CostSheetView";
-import { ReportsView } from "./views/ReportsView";
+import { ReportsView, type ReportTab } from "./views/ReportsView";
 import { MasterDataView, type MasterTableType } from "./views/MasterDataView";
 import { LoginView } from "./views/LoginView";
 import { ForbiddenView } from "./views/ForbiddenView";
@@ -67,9 +67,16 @@ const navigationGroups = [
 ];
 import logo from "./assets/logo.jpg";
 
+const reportTabByMenuName: Record<string, ReportTab> = {
+  Operation: "operation",
+  "Summary Renewal": "renewal",
+  "Summary Project Detail": "project-detail"
+};
+
 function App() {
   // Navigation State
   const [currentView, setCurrentView] = useState<string>("manage");
+  const [activeReportTab, setActiveReportTab] = useState<ReportTab>("operation");
   const [activeMasterTable, setActiveMasterTable] = useState<MasterTableType>("profiles");
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     "Master Data": false,
@@ -143,6 +150,8 @@ function App() {
       if (match) {
         setActiveMasterTable(match.key as MasterTableType);
       }
+    } else if (viewKey === "reports") {
+      setActiveReportTab(reportTabByMenuName[itemName] ?? "operation");
     }
   };
   const isChildSelected = (itemName: string, viewKey: string) => {
@@ -150,7 +159,9 @@ function App() {
       const match = navigationGroups[0].items.find(x => x.name === itemName);
       return match && activeMasterTable === match.key;
     }
-    if (currentView === "reports" && itemName === "Operation") return true; // Default
+    if (currentView === "reports" && viewKey === "reports") {
+      return activeReportTab === (reportTabByMenuName[itemName] ?? "operation");
+    }
     return currentView === viewKey && currentView !== "master-data";
   };
   if (isLoadingSession) {
@@ -297,7 +308,7 @@ function App() {
               <CostSheetView userRole={currentUser.roles} showToast={showToast} />
             )}
             {currentView === "reports" && (
-              <ReportsView />
+              <ReportsView activeTab={activeReportTab} onTabChange={setActiveReportTab} />
             )}
             {currentView === "master-data" && (
               <MasterDataView tableType={activeMasterTable} userRole={currentUser.roles} showToast={showToast} />

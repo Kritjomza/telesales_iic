@@ -5,7 +5,7 @@ import { apiService, ApiError } from "./apiService";
 
 describe("Frontend status constants", () => {
   it("defines the exact required canonical statuses", () => {
-    expect(CustomerStatuses).toEqual(["New", "Wait", "Sent", "Win", "Lost"]);
+    expect(CustomerStatuses).toEqual(["Called", "Not Called"]);
     expect(DeviceStatuses).toEqual(["New", "Win", "Lost"]);
     expect(ProjectStatuses).toEqual(["Discuss", "Quotation", "Win", "Lost", "Hold", "Cancel"]);
   });

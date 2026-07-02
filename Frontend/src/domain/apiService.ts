@@ -11,7 +11,8 @@ import type {
   Competitor,
   Profile,
   CostSheet,
-  PaginatedResponse
+  PaginatedResponse,
+  CustomerCallStatus
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
@@ -139,6 +140,7 @@ export const apiService = {
     telesaleId?: string;
     completeness?: string;
     missingField?: string;
+    status?: CustomerCallStatus;
   }): Promise<PaginatedResponse<Customer>> {
     const searchParams = new URLSearchParams();
     searchParams.append("page", params.page.toString());
@@ -154,6 +156,7 @@ export const apiService = {
     if (params.telesaleId && params.telesaleId !== "all") searchParams.append("telesaleId", params.telesaleId);
     if (params.completeness && params.completeness !== "all") searchParams.append("completeness", params.completeness);
     if (params.missingField && params.missingField !== "all") searchParams.append("missingField", params.missingField);
+    if (params.status) searchParams.append("status", params.status);
 
     const res = await request<any>(`/customers?${searchParams.toString()}`);
     if (res && Array.isArray(res)) {
@@ -193,6 +196,13 @@ export const apiService = {
     return request<Customer>(`/customers/${id}`, {
       method: "PUT",
       body: JSON.stringify(customer)
+    });
+  },
+
+  async updateCustomerCallStatus(id: number, status: CustomerCallStatus): Promise<Customer> {
+    return request<Customer>(`/customers/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
     });
   },
 

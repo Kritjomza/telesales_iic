@@ -33,7 +33,8 @@ public class CustomersController : ControllerBase
         CancellationToken cancellationToken,
         [FromQuery] string? businessType = null,
         [FromQuery] int? saleId = null,
-        [FromQuery] int? telesaleId = null)
+        [FromQuery] int? telesaleId = null,
+        [FromQuery] string? status = null)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
 
@@ -55,6 +56,14 @@ public class CustomersController : ControllerBase
         if (telesaleId.HasValue && telesaleId.Value > 0)
         {
             query = query.Where(c => c.telesale_id == telesaleId.Value);
+        }
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!StatusPolicy.IsValidCustomerStatus(status))
+            {
+                return BadRequest(new { message = StatusPolicy.GetInvalidStatusMessage("Customer", status, StatusPolicy.CustomerStatuses) });
+            }
+            query = query.Where(c => c.status == status);
         }
 
         var searchTerm = CustomerSearch.NormalizeMultiToken(search);
@@ -554,7 +563,7 @@ public class CustomersController : ControllerBase
             phone = dto.phone,
             capital = double.TryParse(cleanCapital, out var cap) ? cap : 0,
             business_type_id = btId,
-            status = "New",
+            status = "Not Called",
             create_type = "Key",
             is_active = true,
             created_at = DateTime.UtcNow,
@@ -571,13 +580,11 @@ public class CustomersController : ControllerBase
         {
             c.sale_id = (int?)userId.Value;
             c.is_assign_sale = true;
-            c.status = "Assigned";
         }
         else if (role == AppRoles.TeleSale)
         {
             c.telesale_id = (int?)userId.Value;
             c.is_assign_telesale = true;
-            c.status = "Assigned";
         }
 
         _db.customers.Add(c);
@@ -611,7 +618,14 @@ public class CustomersController : ControllerBase
             c.capital = double.TryParse(cleanCapital, out var cap) ? cap : c.capital;
         }
         if (dto.is_active.HasValue) c.is_active = dto.is_active.Value;
-        if (dto.status != null) c.status = dto.status;
+        if (dto.status != null)
+        {
+            if (!StatusPolicy.IsValidCustomerStatus(dto.status))
+            {
+                return BadRequest(new { message = StatusPolicy.GetInvalidStatusMessage("Customer", dto.status, StatusPolicy.CustomerStatuses) });
+            }
+            c.status = dto.status;
+        }
         if (dto.subdistrict != null) c.subdistrict = dto.subdistrict;
         if (dto.district != null) c.district = dto.district;
         if (dto.province != null) c.province = dto.province;
@@ -637,6 +651,34 @@ public class CustomersController : ControllerBase
 
         c.updated_at = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
+        return Ok(await MapToResponseDto(c, cancellationToken));
+    }
+
+    [HttpPatch("{id}/status")]
+    public async Task<IActionResult> UpdateCustomerStatus(uint id, [FromBody] CustomerStatusUpdateDto dto, CancellationToken cancellationToken)
+    {
+        if (!User.CanWriteCustomerWorkflow()) return Forbid();
+
+        if (!StatusPolicy.IsValidCustomerStatus(dto.status))
+        {
+            return BadRequest(new { message = StatusPolicy.GetInvalidStatusMessage("Customer", dto.status, StatusPolicy.CustomerStatuses) });
+        }
+
+        var c = await _db.customers.FindAsync(new object[] { id }, cancellationToken);
+        if (c == null)
+        {
+            return User.IsAdmin() ? NotFound() : Forbid();
+        }
+
+        if (!await HasCustomerAccess(c, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        c.status = dto.status;
+        c.updated_at = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
         return Ok(await MapToResponseDto(c, cancellationToken));
     }
 
@@ -1551,6 +1593,13 @@ public class CustomerUpdateDto
     public string? postal_code { get; set; }
 
     public string? start_dt { get; set; }
+}
+
+public class CustomerStatusUpdateDto
+{
+    [Required]
+    [StringLength(50)]
+    public string status { get; set; } = null!;
 }
 
 public class CustomerAssignDto
