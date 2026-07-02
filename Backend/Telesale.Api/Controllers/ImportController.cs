@@ -18,6 +18,7 @@ using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace Telesale.Api.Controllers;
 
@@ -317,22 +318,66 @@ public class ImportController : ControllerBase
             }
 
             bool isValid = rowErrors.Count == 0;
+            var inserted = 0;
+            var updated = 0;
+            var skipped = rowErrors.Count;
 
             if (isValid && commit)
             {
                 using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
                 try
                 {
+                    skipped = 0;
+                    var existingCustomersByCompanyName = await LoadExistingCustomersByNormalizedCompanyNameAsync(
+                        parsedCustomers.Select(customer => customer.name),
+                        cancellationToken);
+
                     for (int i = 0; i < parsedCustomers.Count; i++)
                     {
                         var cust = parsedCustomers[i];
                         var det = parsedDetails[i];
+                        var normalizedCompanyName = NormalizeCompanyNameForImport(cust.name);
 
-                        _db.customers.Add(cust);
-                        await _db.SaveChangesAsync(cancellationToken);
+                        if (normalizedCompanyName != null
+                            && existingCustomersByCompanyName.TryGetValue(normalizedCompanyName, out var existingCustomer))
+                        {
+                            existingCustomer.name = cust.name;
+                            existingCustomer.address = cust.address;
+                            existingCustomer.phone = cust.phone;
+                            existingCustomer.updated_user = (int)userId.Value;
+                            existingCustomer.updated_at = DateTime.UtcNow;
 
-                        det.cust_id = cust.id;
-                        _db.details.Add(det);
+                            var existingContact = await _db.details
+                                .FirstOrDefaultAsync(item => item.cust_id == existingCustomer.id && item.is_active != false, cancellationToken);
+                            if (existingContact == null)
+                            {
+                                det.cust_id = existingCustomer.id;
+                                _db.details.Add(det);
+                            }
+                            else
+                            {
+                                existingContact.contact_name = det.contact_name;
+                                existingContact.contact_email = det.contact_email;
+                                existingContact.contact_tel = det.contact_tel;
+                                existingContact.updated_at = DateTime.UtcNow;
+                            }
+
+                            updated++;
+                        }
+                        else
+                        {
+                            _db.customers.Add(cust);
+                            await _db.SaveChangesAsync(cancellationToken);
+
+                            det.cust_id = cust.id;
+                            _db.details.Add(det);
+                            if (normalizedCompanyName != null)
+                            {
+                                existingCustomersByCompanyName[normalizedCompanyName] = cust;
+                            }
+
+                            inserted++;
+                        }
                     }
                     await _db.SaveChangesAsync(cancellationToken);
                     await transaction.CommitAsync(cancellationToken);
@@ -348,6 +393,9 @@ public class ImportController : ControllerBase
             {
                 isValid,
                 totalRows = parsedCustomers.Count,
+                inserted,
+                updated,
+                skipped,
                 errors = rowErrors,
                 previewRows
             });
@@ -1186,6 +1234,7 @@ public class ImportController : ControllerBase
         // 1. First Pass: Count total rows and register encoding
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
         var columns = new List<string>();
+        var importedCompanyNames = new List<string?>();
 
         using (var countStream = System.IO.File.OpenRead(tempFile))
         {
@@ -1203,9 +1252,20 @@ public class ImportController : ControllerBase
                 while (reader.Read())
                 {
                     totalRows++;
+                    var rawRow = new Dictionary<string, string>();
+                    for (int i = 0; i < columns.Count; i++)
+                    {
+                        rawRow[columns[i]] = i < reader.FieldCount ? reader.GetValue(i)?.ToString()?.Trim() ?? "" : "";
+                    }
+
+                    importedCompanyNames.Add(BuildCustomerImportRow(rawRow, request.Mappings).Name);
                 }
             }
         }
+
+        var existingCustomersByCompanyName = await LoadExistingCustomersByNormalizedCompanyNameAsync(
+            importedCompanyNames,
+            cancellationToken);
 
         // Setup session
         var session = new import_session
@@ -1247,26 +1307,7 @@ public class ImportController : ControllerBase
                             rawRow[columns[i]] = i < reader.FieldCount ? reader.GetValue(i)?.ToString()?.Trim() ?? "" : "";
                         }
 
-                        // Map
-                        var importRow = new CustomerImportRow();
-                        foreach (var mapping in request.Mappings)
-                        {
-                            if (string.IsNullOrEmpty(mapping.Value) || !rawRow.TryGetValue(mapping.Key, out var val)) continue;
-
-                             switch (mapping.Value.ToLowerInvariant())
-                            {
-                                case "name": importRow.Name = val; break;
-                                case "address": importRow.Address = val; break;
-                                case "phone": importRow.Phone = val; break;
-                                case "capital": importRow.Capital = val; break;
-                                case "business_type": importRow.BusinessType = val; break;
-                                case "contact_name": importRow.ContactName = val; break;
-                                case "contact_email": importRow.ContactEmail = val; break;
-                                case "contact_tel": importRow.ContactTel = val; break;
-                                case "contact_position": importRow.ContactPosition = val; break;
-                                case "unstructured_company_info": importRow.UnstructuredCompanyInfo = val; break;
-                            }
-                        }
+                        var importRow = BuildCustomerImportRow(rawRow, request.Mappings);
 
                         // Validate/Normalize single row
                         var validatedResultList = await _validationService.ValidateAndNormalizeRowsAsync(new List<CustomerImportRow> { importRow });
@@ -1292,24 +1333,28 @@ public class ImportController : ControllerBase
                         }
                         else
                         {
-                            bool isUpdate = resolvedAction.Equals("update", StringComparison.OrdinalIgnoreCase) && validatedRow.Duplicate?.MatchedCustomerId.HasValue == true;
+                            var normalizedCompanyName = NormalizeCompanyNameForImport(validatedRow.Name);
+                            var existingCustomer = normalizedCompanyName != null
+                                && existingCustomersByCompanyName.TryGetValue(normalizedCompanyName, out var companyMatch)
+                                ? companyMatch
+                                : null;
+
+                            bool isUpdate = existingCustomer != null
+                                || (resolvedAction.Equals("update", StringComparison.OrdinalIgnoreCase) && validatedRow.Duplicate?.MatchedCustomerId.HasValue == true);
                             bool updateSuccess = false;
 
                             if (isUpdate)
                             {
-                                var c = await _db.customers.FindAsync(new object[] { validatedRow.Duplicate!.MatchedCustomerId!.Value }, cancellationToken);
+                                var c = existingCustomer ?? await _db.customers.FindAsync(new object[] { validatedRow.Duplicate!.MatchedCustomerId!.Value }, cancellationToken);
                                 if (c != null)
                                 {
-                                    if (!string.IsNullOrWhiteSpace(validatedRow.Name)) c.name = validatedRow.Name;
-                                    if (!string.IsNullOrWhiteSpace(validatedRow.Address)) c.address = validatedRow.Address;
-                                    if (!string.IsNullOrWhiteSpace(validatedRow.Phone)) c.phone = validatedRow.Phone;
-                                    if (validatedRow.Capital.HasValue) c.capital = validatedRow.Capital.Value;
-
-                                    if (!string.IsNullOrWhiteSpace(validatedRow.BusinessType))
-                                    {
-                                        var bt = await _db.business_types.FirstOrDefaultAsync(b => b.type == validatedRow.BusinessType, cancellationToken);
-                                        if (bt != null) c.business_type_id = (int)bt.id;
-                                    }
+                                    await UpdateImportedCustomerAsync(
+                                        c,
+                                        validatedRow,
+                                        request.SaleId,
+                                        request.TelesaleId,
+                                        userId.Value,
+                                        cancellationToken);
 
                                     /*
                                     var oldSaleId = c.sale_id;
@@ -1344,34 +1389,6 @@ public class ImportController : ControllerBase
                                         _db.assignment_histories.Add(history);
                                     }
                                     */
-
-                                    c.updated_at = DateTime.UtcNow;
-                                    c.updated_user = (int?)userId.Value;
-
-                                    var d = await _db.details.FirstOrDefaultAsync(det => det.cust_id == c.id && det.is_active != false, cancellationToken);
-                                    if (d != null)
-                                    {
-                                        if (!string.IsNullOrWhiteSpace(validatedRow.ContactName)) d.contact_name = validatedRow.ContactName;
-                                        if (!string.IsNullOrWhiteSpace(validatedRow.ContactEmail)) d.contact_email = validatedRow.ContactEmail;
-                                        if (!string.IsNullOrWhiteSpace(validatedRow.ContactTel)) d.contact_tel = validatedRow.ContactTel;
-                                        if (!string.IsNullOrWhiteSpace(validatedRow.ContactPosition)) d.contact_position = validatedRow.ContactPosition;
-                                        d.updated_at = DateTime.UtcNow;
-                                    }
-                                    else if (!string.IsNullOrWhiteSpace(validatedRow.ContactName) || !string.IsNullOrWhiteSpace(validatedRow.ContactEmail) || !string.IsNullOrWhiteSpace(validatedRow.ContactTel) || !string.IsNullOrWhiteSpace(validatedRow.ContactPosition))
-                                    {
-                                        d = new detail
-                                        {
-                                            cust_id = c.id,
-                                            contact_name = validatedRow.ContactName,
-                                            contact_email = validatedRow.ContactEmail ?? "",
-                                            contact_tel = validatedRow.ContactTel ?? "",
-                                            contact_position = validatedRow.ContactPosition ?? "",
-                                            is_active = true,
-                                            created_at = DateTime.UtcNow,
-                                            updated_at = DateTime.UtcNow
-                                        };
-                                        _db.details.Add(d);
-                                    }
 
                                     rowStatus = "Updated";
                                     updated++;
@@ -1415,6 +1432,10 @@ public class ImportController : ControllerBase
 
                                 _db.customers.Add(c);
                                 await _db.SaveChangesAsync(cancellationToken);
+                                if (normalizedCompanyName != null)
+                                {
+                                    existingCustomersByCompanyName[normalizedCompanyName] = c;
+                                }
 
                                 /*
                                 if (c.sale_id.HasValue || c.telesale_id.HasValue)
@@ -1605,6 +1626,9 @@ public class ImportController : ControllerBase
         }).ToList();
 
         var validatedRows = await _validationService.ValidateAndNormalizeRowsAsync(importRows);
+        var existingCustomersByCompanyName = await LoadExistingCustomersByNormalizedCompanyNameAsync(
+            validatedRows.Select(row => row.Name),
+            cancellationToken);
         var imported = 0;
         var updated = 0;
         var skipped = 0;
@@ -1645,8 +1669,14 @@ public class ImportController : ControllerBase
                 }
                 else
                 {
+                    var normalizedCompanyName = NormalizeCompanyNameForImport(row.Name);
+                    var existingCustomer = normalizedCompanyName != null
+                        && existingCustomersByCompanyName.TryGetValue(normalizedCompanyName, out var companyMatch)
+                        ? companyMatch
+                        : null;
+
                     var matchedCustomerId = sourceRow.MatchedCustomerId ?? row.Duplicate?.MatchedCustomerId;
-                    var existingCustomer = action == "update" && matchedCustomerId.HasValue
+                    existingCustomer ??= action == "update" && matchedCustomerId.HasValue
                         ? await _db.customers.FindAsync(new object[] { matchedCustomerId.Value }, cancellationToken)
                         : null;
 
@@ -1664,12 +1694,16 @@ public class ImportController : ControllerBase
                     }
                     else
                     {
-                        await CreateImportedCustomerAsync(
+                        var createdCustomer = await CreateImportedCustomerAsync(
                             row,
                             request.SaleId,
                             request.TelesaleId,
                             userId.Value,
                             cancellationToken);
+                        if (normalizedCompanyName != null)
+                        {
+                            existingCustomersByCompanyName[normalizedCompanyName] = createdCustomer;
+                        }
                         imported++;
                     }
                 }
@@ -1830,6 +1864,82 @@ public class ImportController : ControllerBase
         };
     }
 
+    private static CustomerImportRow BuildCustomerImportRow(
+        Dictionary<string, string> rawRow,
+        Dictionary<string, string> mappings)
+    {
+        var importRow = new CustomerImportRow();
+        foreach (var mapping in mappings)
+        {
+            if (string.IsNullOrEmpty(mapping.Value) || !rawRow.TryGetValue(mapping.Key, out var value))
+            {
+                continue;
+            }
+
+            switch (mapping.Value.ToLowerInvariant())
+            {
+                case "name": importRow.Name = value; break;
+                case "address": importRow.Address = value; break;
+                case "phone": importRow.Phone = value; break;
+                case "capital": importRow.Capital = value; break;
+                case "business_type": importRow.BusinessType = value; break;
+                case "contact_name": importRow.ContactName = value; break;
+                case "contact_email": importRow.ContactEmail = value; break;
+                case "contact_tel": importRow.ContactTel = value; break;
+                case "contact_position": importRow.ContactPosition = value; break;
+                case "unstructured_company_info": importRow.UnstructuredCompanyInfo = value; break;
+            }
+        }
+
+        return importRow;
+    }
+
+    private async Task<Dictionary<string, customer>> LoadExistingCustomersByNormalizedCompanyNameAsync(
+        IEnumerable<string?> importedCompanyNames,
+        CancellationToken cancellationToken)
+    {
+        var importedNameKeys = importedCompanyNames
+            .Select(NormalizeCompanyNameForImport)
+            .Where(key => key != null)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var matches = new Dictionary<string, customer>(StringComparer.OrdinalIgnoreCase);
+        if (importedNameKeys.Count == 0)
+        {
+            return matches;
+        }
+
+        var activeCustomers = await _db.customers
+            .Where(customer => customer.is_active != false && customer.name != null)
+            .OrderBy(customer => customer.id)
+            .ToListAsync(cancellationToken);
+
+        foreach (var existingCustomer in activeCustomers)
+        {
+            var key = NormalizeCompanyNameForImport(existingCustomer.name);
+            if (key == null || !importedNameKeys.Contains(key) || matches.ContainsKey(key))
+            {
+                continue;
+            }
+
+            // Existing production data may already contain duplicate normalized names.
+            // Keep application-level matching deterministic and plan a cleanup before any unique DB index.
+            matches[key] = existingCustomer;
+        }
+
+        return matches;
+    }
+
+    private static string? NormalizeCompanyNameForImport(string? companyName)
+    {
+        if (string.IsNullOrWhiteSpace(companyName))
+        {
+            return null;
+        }
+
+        return Regex.Replace(companyName.Trim(), @"\s+", " ").ToUpperInvariant();
+    }
+
     private async Task UpdateImportedCustomerAsync(
         customer customer,
         ValidatedRowResult row,
@@ -1838,11 +1948,12 @@ public class ImportController : ControllerBase
         uint userId,
         CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(row.Name)) customer.name = row.Name;
-        if (!string.IsNullOrWhiteSpace(row.Address)) customer.address = row.Address;
-        if (!string.IsNullOrWhiteSpace(row.Phone)) customer.phone = row.Phone;
-        if (row.Capital.HasValue) customer.capital = row.Capital.Value;
+        customer.name = row.Name;
+        customer.address = row.Address;
+        customer.phone = row.Phone;
+        customer.capital = row.Capital;
 
+        customer.business_type_id = null;
         if (!string.IsNullOrWhiteSpace(row.BusinessType))
         {
             var businessType = await _db.business_types
@@ -1876,7 +1987,7 @@ public class ImportController : ControllerBase
         }
     }
 
-    private async Task CreateImportedCustomerAsync(
+    private async Task<customer> CreateImportedCustomerAsync(
         ValidatedRowResult row,
         int? saleId,
         int? telesaleId,
@@ -1915,6 +2026,8 @@ public class ImportController : ControllerBase
             ApplyImportedContact(contact, row);
             _db.details.Add(contact);
         }
+
+        return customer;
     }
 
     private static void ApplyImportAssignments(customer customer, int? saleId, int? telesaleId)
@@ -1932,10 +2045,10 @@ public class ImportController : ControllerBase
 
     private static void ApplyImportedContact(detail contact, ValidatedRowResult row)
     {
-        if (!string.IsNullOrWhiteSpace(row.ContactName)) contact.contact_name = row.ContactName;
-        if (!string.IsNullOrWhiteSpace(row.ContactEmail)) contact.contact_email = row.ContactEmail;
-        if (!string.IsNullOrWhiteSpace(row.ContactTel)) contact.contact_tel = row.ContactTel;
-        if (!string.IsNullOrWhiteSpace(row.ContactPosition)) contact.contact_position = row.ContactPosition;
+        contact.contact_name = row.ContactName;
+        contact.contact_email = row.ContactEmail;
+        contact.contact_tel = row.ContactTel;
+        contact.contact_position = row.ContactPosition;
         contact.updated_at = DateTime.UtcNow;
     }
 
