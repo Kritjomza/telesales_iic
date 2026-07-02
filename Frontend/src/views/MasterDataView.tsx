@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Plus, Pencil, Trash2, Search, Upload } from "lucide-react";
+import { Database, Plus, Pencil, Trash2, Search, Upload } from "lucide-react";
 import { apiService } from "../domain/apiService";
 import type { Brand, Product, AntivirusPrice, Category, Competitor, Profile, User } from "../domain/types";
 import { Drawer } from "../components/Drawer";
@@ -16,6 +16,12 @@ export type MasterTableType =
   | "categories" 
   | "users" 
   | "competitors";
+
+const formatNumberCell = (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value) ? value.toLocaleString() : "-";
+
+const formatCurrencyCell = (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value) ? `${value.toLocaleString()} THB` : "-";
 
 interface MasterDataViewProps {
   tableType: MasterTableType;
@@ -105,6 +111,35 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
       case "categories": return "Categories";
       case "users": return "Users";
       case "competitors": return "Competitors";
+    }
+  };
+
+  const getTableDescription = () => {
+    switch (tableType) {
+      case "profiles": return "Maintain reusable customer profile and product profile references for telesales workflows.";
+      case "antiviruspricelist": return "Manage antivirus price ranges, editions, server/client types, and brand-linked cost data.";
+      case "products": return "Control product catalog records mapped to brands and categories.";
+      case "brands": return "Maintain brand names and codes used across products and price references.";
+      case "businesstypes": return "Standardize business type labels used for customer segmentation.";
+      case "categories": return "Maintain product and service category labels for structured records.";
+      case "users": return "Review system user reference data and role metadata.";
+      case "competitors": return "Track competitor references used for comparison and sales context.";
+    }
+  };
+
+  const getTableCategory = () => {
+    switch (tableType) {
+      case "profiles":
+      case "antiviruspricelist":
+      case "products":
+      case "brands":
+      case "categories":
+        return "Catalog";
+      case "businesstypes":
+      case "competitors":
+        return "Market Reference";
+      case "users":
+        return "Access Reference";
     }
   };
 
@@ -242,20 +277,20 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
   }
 
   return (
-    <div className="workspace-view">
-      <header className="topbar">
+    <div className="workspace-view master-data-workspace">
+      <header className="topbar master-data-topbar">
         <div>
           <p>Master Data / {getTableTitle()}</p>
           <h1>Manage {getTableTitle()}</h1>
+          <span>{getTableDescription()}</span>
         </div>
         {tableType !== "users" && canWriteMasterData(userRole, tableType) && (
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div className="topbar-actions master-data-actions">
             {(tableType === "profiles" || tableType === "antiviruspricelist") && (
               <button
                 className="secondary-button"
                 onClick={() => setIsImportOpen(true)}
                 type="button"
-                style={{ display: "flex", alignItems: "center", gap: "6px" }}
               >
                 <Upload size={15} />
                 Import
@@ -269,9 +304,34 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
         )}
       </header>
 
-      <main className="content animate-fade-in">
-        <div className="panel">
-          <div className="filter-band">
+      <main className="content master-data-content animate-fade-in">
+        <section className="master-data-summary" aria-label="Master data table summary">
+          <div>
+            <span>Dataset</span>
+            <strong>{getTableTitle()}</strong>
+            <small>{getTableCategory()}</small>
+          </div>
+          <div>
+            <span>Loaded Records</span>
+            <strong>{data.length.toLocaleString()}</strong>
+            <small>Current table scope</small>
+          </div>
+          <div>
+            <span>Visible Rows</span>
+            <strong>{filteredData.length.toLocaleString()}</strong>
+            <small>{query.trim() ? "Filtered result" : "No active search"}</small>
+          </div>
+        </section>
+
+        <div className="panel master-data-panel">
+          <div className="master-data-panel-header">
+            <div>
+              <h2>{getTableTitle()} Records</h2>
+              <p>Search, review, and maintain this reference table without changing existing data rules.</p>
+            </div>
+          </div>
+
+          <div className="filter-band master-data-filter-band">
             <label className="filter-search">
               <span>Search inside {getTableTitle().toLowerCase()}</span>
               <div className="search-field">
@@ -286,9 +346,13 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
               </div>
             </label>
           </div>
+          <div className="master-data-active-search" aria-live="polite">
+            <span>Search status</span>
+            <strong>{query.trim() ? `Filtering by "${query.trim()}"` : "Showing all loaded records"}</strong>
+          </div>
 
-          <div className="table-wrap">
-            <table className="corporate-table" aria-label={`${getTableTitle()} database table`}>
+          <div className="table-wrap master-data-table-wrap">
+            <table className="corporate-table master-data-table" aria-label={`${getTableTitle()} database table`}>
               <thead>
                 {tableType === "profiles" && (
                   <tr>
@@ -371,8 +435,24 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={10} style={{ textAlign: "center", padding: "32px 0" }}>
-                      Loading data from database...
+                    <td colSpan={10}>
+                      <div className="table-state table-state-loading" role="status" aria-live="polite">
+                        <span className="spinner" aria-hidden="true" />
+                        <div>
+                          <strong>Loading {getTableTitle().toLowerCase()}</strong>
+                          <span>Fetching the latest reference records.</span>
+                        </div>
+                      </div>
+                      <div className="table-skeleton-list" aria-hidden="true">
+                        {Array.from({ length: 4 }).map((_, index) => (
+                          <div className="table-skeleton-row" key={index}>
+                            <span className="skeleton" />
+                            <span className="skeleton" />
+                            <span className="skeleton" />
+                            <span className="skeleton" />
+                          </div>
+                        ))}
+                      </div>
                     </td>
                   </tr>
                 ) : filteredData.length > 0 ? (
@@ -405,8 +485,8 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                           <td>{getBrandName(item.brand_id)}</td>
                           <td>{getCategoryName(item.category_id)}</td>
                           <td><strong>{item.name}</strong></td>
-                          <td>{item.cost.toLocaleString()} THB</td>
-                          <td>{item.price.toLocaleString()} THB</td>
+                          <td>{formatCurrencyCell(item.cost)}</td>
+                          <td>{formatCurrencyCell(item.price)}</td>
                         </>
                       )}
                       {tableType === "brands" && (
@@ -449,7 +529,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                           <td>{item.id}</td>
                           <td><strong>{item.name}</strong></td>
                           <td>{item.year}</td>
-                          <td>{item.amt.toLocaleString()}</td>
+                          <td>{formatNumberCell(item.amt)}</td>
                           <td>{item.compare}</td>
                         </>
                       )}
@@ -474,8 +554,14 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={10} style={{ textAlign: "center", padding: "24px 0" }}>
-                      No records found.
+                    <td colSpan={10}>
+                      <div className="table-state table-state-empty">
+                        <Database size={18} />
+                        <div>
+                          <strong>No records found.</strong>
+                          <span>Try a broader search term or add a new record if you have permission.</span>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 )}

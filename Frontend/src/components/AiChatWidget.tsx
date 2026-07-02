@@ -55,6 +55,19 @@ export function AiChatWidget() {
   }, [isOpen]);
 
   useEffect(() => {
+    if (!isMounted) return;
+
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closePanel();
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isMounted]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages, isSending]);
 
@@ -68,6 +81,9 @@ export function AiChatWidget() {
 
   const closePanel = () => {
     setIsOpen(false);
+    if (closeTimerRef.current) {
+      window.clearTimeout(closeTimerRef.current);
+    }
     closeTimerRef.current = window.setTimeout(() => {
       setIsMounted(false);
     }, 210);
@@ -127,11 +143,17 @@ export function AiChatWidget() {
   return (
     <div className="ai-chat-root">
       {isMounted && (
+        <div
+          className={`ai-chat-overlay ${isOpen ? "open" : "closing"}`}
+          onClick={closePanel}
+        >
         <section
           className={`ai-chat-panel ${isOpen ? "open" : "closing"}`}
+          id="iic-ai-chat-panel"
           role="dialog"
           aria-label="IIC AI Assistant"
           aria-modal="false"
+          onClick={(event) => event.stopPropagation()}
         >
           <header className="ai-chat-header">
             <div className="ai-chat-title-row">
@@ -219,12 +241,15 @@ export function AiChatWidget() {
             </button>
           </form>
         </section>
+        </div>
       )}
 
       <button
         className={`ai-chat-fab ${isOpen ? "active" : ""}`}
         type="button"
-        aria-label="Open IIC AI Assistant"
+        aria-label={isOpen ? "Toggle IIC AI Assistant tab" : "Open IIC AI Assistant"}
+        aria-controls={isMounted ? "iic-ai-chat-panel" : undefined}
+        aria-expanded={isOpen}
         onClick={isOpen ? closePanel : openPanel}
       >
         <Sparkles size={17} />

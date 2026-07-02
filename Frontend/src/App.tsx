@@ -9,7 +9,6 @@ import {
   Database
 } from "lucide-react";
 import { Toast, type ToastItem } from "./components/Toast";
-import { AiChatWidget } from "./components/AiChatWidget";
 import { CustomerManageView } from "./views/CustomerManageView";
 import { CostSheetView } from "./views/CostSheetView";
 import { ReportsView } from "./views/ReportsView";
@@ -66,6 +65,8 @@ const navigationGroups = [
     ]
   }
 ];
+import logo from "./assets/logo.jpg";
+
 function App() {
   // Navigation State
   const [currentView, setCurrentView] = useState<string>("manage");
@@ -186,7 +187,9 @@ function App() {
       {/* Sidebar Navigation */}
       <aside className="sidebar">
         <a className="brand" href="/" onClick={(e) => { e.preventDefault(); setCurrentView("manage"); }} aria-label="IIC Telesales home">
-          <span className="brand-mark">IIC</span>
+          <div className="brand-mark" style={{ overflow: "hidden" }}>
+            <img src={logo} alt="IIC Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} />
+          </div>
           <span>
             <strong>IIC Telesales</strong>
             <small>Modernization Console</small>
@@ -213,7 +216,7 @@ function App() {
                 return Boolean(isChildSelected(item.name, viewKey));
               });
               return (
-                <section className="nav-group" key={group.label}>
+                <section className={`nav-group ${group.label === "Master Data" ? "master-nav-group" : ""}`} key={group.label}>
                   <button
                     className={`nav-parent ${groupActive ? "active" : ""}`}
                     type="button"
@@ -222,7 +225,7 @@ function App() {
                     <Icon size={17} />
                     <span>{group.label}</span>
                   </button>
-                  <div className="nav-children">
+                  <div className={`nav-children ${group.label === "Master Data" ? "master-nav-children" : ""}`}>
                     {group.items
                       .filter(item => {
                         const viewKey = group.label === "Master Data" ? "master-data" : item.key;
@@ -240,7 +243,7 @@ function App() {
                         return (
                           <button
                             key={item.name}
-                            className={`nav-child-btn ${selected ? "selected" : ""}`}
+                            className={`nav-child-btn ${group.label === "Master Data" ? "master-nav-child" : ""} ${selected ? "selected" : ""}`}
                             onClick={() => handleNavigation(viewKey, item.name)}
                             type="button"
                           >
@@ -308,8 +311,6 @@ function App() {
           </>
         )}
       </div>
-
-      <AiChatWidget />
 
       {/* Global Toast Notifications */}
       <Toast toasts={toasts} onClose={removeToast} />

@@ -1,6 +1,8 @@
 import React, { useState } from "react";
-import { Lock, User, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { Lock, User, AlertCircle, Eye, EyeOff, ShieldCheck, Server } from "lucide-react";
 import { apiService } from "../domain/apiService";
+
+import logo from "../assets/logo.jpg";
 
 interface LoginViewProps {
   onLoginSuccess: (user: any) => void;
@@ -37,175 +39,100 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, showToast 
   };
 
   return (
-    <div 
-      className="login-container" 
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: "100vh",
-        background: "radial-gradient(circle at 20% 10%, rgba(0, 91, 187, 0.13), transparent 28%), linear-gradient(135deg, #f8fafc 0%, #eef5fd 46%, #dfeaf7 100%)",
-        padding: "20px"
-      }}
-    >
-      <div 
-        className="login-card" 
-        style={{
-          width: "100%",
-          maxWidth: "400px",
-          background: "var(--iic-card)",
-          border: "1px solid var(--iic-border)",
-          borderRadius: "8px",
-          boxShadow: "var(--shadow-lg)",
-          padding: "32px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "24px"
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <div 
-            style={{
-              width: "48px",
-              height: "48px",
-              background: "var(--iic-navy)",
-              color: "#ffffff",
-              borderRadius: "8px",
-              display: "grid",
-              placeItems: "center",
-              margin: "0 auto 16px auto",
-              fontWeight: 800,
-              fontSize: "18px"
-            }}
-          >
-            IIC
+    <div className="login-container">
+      <section className="login-shell" aria-label="IIC telesales sign in">
+        <aside className="login-brand-panel">
+          <div className="login-brand-mark" style={{ overflow: "hidden" }}>
+            <img src={logo} alt="IIC Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} />
           </div>
-          <h1 style={{ fontSize: "20px", fontWeight: 700, color: "var(--iic-black)" }}>Sign In</h1>
-          <p style={{ fontSize: "13px", color: "var(--iic-muted)", marginTop: "4px" }}>
-            IIC Telesales Modernization System
-          </p>
+          <div>
+            <p className="login-kicker">Secure operations access</p>
+            <h1>IIC Telesales Platform</h1>
+            <p className="login-brand-copy">
+              A controlled workspace for customer management, import review, and telesales execution.
+            </p>
+          </div>
+          <div className="login-trust-row" aria-label="Platform trust indicators">
+            <span><ShieldCheck size={15} /> Role-based access</span>
+            <span><Server size={15} /> Live customer data</span>
+          </div>
+        </aside>
+
+        <div className="login-card">
+          <div className="login-card-header">
+            <div className="login-card-mark" aria-hidden="true">
+              <Lock size={18} />
+            </div>
+            <div>
+              <h2>Sign in</h2>
+              <p>IIC Telesales Modernization System</p>
+            </div>
+          </div>
+
+          {errorMsg && (
+            <div className="login-alert" role="alert">
+              <AlertCircle size={16} />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="login-form">
+            <div className="form-group">
+              <label htmlFor="username_login">
+                Username
+              </label>
+              <div className="login-input-wrap">
+                <User size={16} className="login-input-icon" />
+                <input
+                  id="username_login"
+                  type="text"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  disabled={isLoading}
+                  autoComplete="username"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="password_login">
+                Password
+              </label>
+              <div className="login-input-wrap">
+                <Lock size={16} className="login-input-icon" />
+                <input
+                  id="password_login"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="login-password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="primary-button login-submit"
+              disabled={isLoading}
+            >
+              {isLoading ? "Signing in..." : "Sign In"}
+            </button>
+          </form>
         </div>
-
-        {errorMsg && (
-          <div 
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "10px 12px",
-              background: "var(--iic-danger-bg)",
-              border: "1px solid var(--iic-danger-border)",
-              borderRadius: "6px",
-              color: "var(--iic-danger)",
-              fontSize: "13px"
-            }}
-          >
-            <AlertCircle size={16} style={{ flexShrink: 0 }} />
-            <span>{errorMsg}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div className="form-group">
-            <label htmlFor="username_login">
-              Username
-            </label>
-            <div style={{ position: "relative" }}>
-              <User 
-                size={16} 
-                style={{
-                  position: "absolute",
-                  left: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "var(--text-light)"
-                }} 
-              />
-              <input
-                id="username_login"
-                type="text"
-                placeholder="Enter your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px 10px 36px"
-                }}
-                disabled={isLoading}
-                autoComplete="username"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="password_login">
-              Password
-            </label>
-            <div style={{ position: "relative" }}>
-              <Lock 
-                size={16} 
-                style={{
-                  position: "absolute",
-                  left: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "var(--text-light)"
-                }} 
-              />
-              <input
-                id="password_login"
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "10px 36px 10px 36px"
-                }}
-                disabled={isLoading}
-                autoComplete="current-password"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: "absolute",
-                  right: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "transparent",
-                  border: 0,
-                  cursor: "pointer",
-                  color: "var(--text-light)",
-                  display: "grid",
-                  placeItems: "center",
-                  padding: 0
-                }}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="primary-button"
-            style={{
-              width: "100%",
-              height: "42px",
-              fontSize: "14px",
-              fontWeight: 700,
-              marginTop: "8px"
-            }}
-            disabled={isLoading}
-          >
-            {isLoading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
-      </div>
+      </section>
     </div>
   );
 };

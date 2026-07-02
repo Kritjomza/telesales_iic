@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { apiService } from "../domain/apiService";
 import { ImportMasterDataModal } from "../components/ImportMasterDataModal";
+import { AiChatWidget } from "../components/AiChatWidget";
 import type { Customer, ContactDetail, DetailDevice, DetailProject, User, Category, Competitor } from "../domain/types";
 import { Drawer } from "../components/Drawer";
 
@@ -37,6 +38,13 @@ type SubView =
   | { type: "projects"; contact: ContactDetail; customer: Customer };
 
 const SEARCH_DEBOUNCE_MS = 350;
+
+const missingFieldFilterLabels: Partial<Record<CustomerQuickFilter, string>> = {
+  noPhone: missingFieldLabels.phone,
+  noContact: missingFieldLabels.contact,
+  noOfficePhone: missingFieldLabels.officePhone,
+  noEmail: missingFieldLabels.email
+};
 
 export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole, showToast }) => {
   const isAdmin = isAdminRole(userRole);
@@ -323,6 +331,19 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     missingFieldFilter
   ]);
 
+  const activeFilterSummary = useMemo(() => {
+    const items: string[] = [];
+    if (appliedQuery.trim()) items.push(`Search: ${appliedQuery.trim()}`);
+    if (appliedBusinessType) items.push(`Business: ${appliedBusinessType}`);
+    if (completenessFilter !== "all") {
+      items.push(`Completeness: ${completenessFilter === "complete" ? "Complete" : "Incomplete"}`);
+    }
+    if (missingFieldFilter !== "all") {
+      items.push(`Missing: ${missingFieldFilterLabels[missingFieldFilter] || missingFieldFilter}`);
+    }
+    return items;
+  }, [appliedQuery, appliedBusinessType, completenessFilter, missingFieldFilter]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
@@ -587,14 +608,15 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
   }
 
   return (
-    <div className="workspace-view">
+    <div className="workspace-view manage-workspace">
       {/* SECTION 1: CUSTOMER LISTING VIEW */}
       {subView.type === "list" && (
         <>
-          <header className="topbar">
+          <header className="topbar manage-topbar">
             <div>
               <p>Customer / Manage</p>
               <h1>Customer Manage</h1>
+              <span>Manage customer records, completeness, renewal readiness, and advance sales data.</span>
             </div>
             <div className="topbar-actions">
               {(isAdmin || isSupervisor) && (
@@ -602,7 +624,6 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   className="secondary-button"
                   onClick={() => setIsImportModalOpen(true)}
                   type="button"
-                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
                 >
                   <Upload size={15} />
                   Import
@@ -615,7 +636,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
             </div>
           </header>
 
-          <main className="content animate-fade-in">
+          <main className="content manage-content animate-fade-in">
             <section className="metrics-grid" aria-label="Customer summary metrics">
               <div className="metric-card blue">
                 <div className="metric-icon">
@@ -624,6 +645,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                 <div>
                   <span>Total Customers</span>
                   <strong>{metrics.total}</strong>
+                  <small>Current records</small>
                 </div>
               </div>
               <div className="metric-card teal">
@@ -633,6 +655,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                 <div>
                   <span>Complete Data</span>
                   <strong>{metrics.complete}</strong>
+                  <small>Ready for outreach</small>
                 </div>
               </div>
               <div className="metric-card amber">
@@ -642,6 +665,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                 <div>
                   <span>Incomplete Data</span>
                   <strong>{metrics.incomplete}</strong>
+                  <small>Needs cleanup</small>
                 </div>
               </div>
               <div className="metric-card red">
@@ -651,6 +675,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                 <div>
                   <span>Near Renewal (30d)</span>
                   <strong>{metrics.nearRenewal}</strong>
+                  <small>Priority follow-up</small>
                 </div>
               </div>
             </section>
@@ -658,7 +683,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
             {/* Filter Panel */}
             <div className="panel filter-panel">
               <form className="filter-band" onSubmit={handleSearchSubmit}>
-                <label>
+                <label className="filter-search">
                   <span>Customer name or address</span>
                   <input
                     type="text"
@@ -747,9 +772,22 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                 </div>
               </div>
 
+              <div className="manage-active-filters" aria-live="polite">
+                <span>Active filters</span>
+                {activeFilterSummary.length > 0 ? (
+                  <div className="manage-filter-chip-list">
+                    {activeFilterSummary.map(item => (
+                      <span className="manage-filter-chip" key={item}>{item}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <strong>None</strong>
+                )}
+              </div>
+
               {/* Customer Table */}
-              <div className="table-wrap">
-                <table className="corporate-table" aria-label="Customer records">
+              <div className="table-wrap customer-table-wrap">
+                <table className="corporate-table manage-customer-table" aria-label="Customer records">
                   <thead>
                     <tr>
                       <th style={{ width: "4%" }}>No.</th>
@@ -764,15 +802,31 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                   <tbody>
                     {isLoading ? (
                       <tr>
-                        <td colSpan={7} style={{ textAlign: "center", padding: "32px 0" }}>
-                          Loading database customers...
+                        <td colSpan={7}>
+                          <div className="table-state table-state-loading" role="status" aria-live="polite">
+                            <span className="spinner" aria-hidden="true" />
+                            <div>
+                              <strong>Loading customer records</strong>
+                              <span>Fetching the latest customer data and metrics.</span>
+                            </div>
+                          </div>
+                          <div className="table-skeleton-list" aria-hidden="true">
+                            {Array.from({ length: 4 }).map((_, index) => (
+                              <div className="table-skeleton-row" key={index}>
+                                <span className="skeleton" />
+                                <span className="skeleton" />
+                                <span className="skeleton" />
+                                <span className="skeleton" />
+                              </div>
+                            ))}
+                          </div>
                         </td>
                       </tr>
                     ) : filteredCustomers.length > 0 ? (
                       filteredCustomers.map(c => (
                         <tr key={c.id} className={!c.is_active ? "row-disabled" : ""}>
-                          <td>{c.id}</td>
-                          <td>
+                          <td className="table-id-cell">{c.id}</td>
+                          <td className="customer-primary-cell">
                             <strong>{c.name}</strong>
                             <span className="subtext">{c.address}</span>
                             {c.matchedField && (
@@ -903,8 +957,14 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={7} style={{ textAlign: "center", padding: "32px 0" }}>
-                          No customers found.
+                        <td colSpan={7}>
+                          <div className="table-state table-state-empty">
+                            <Info size={18} />
+                            <div>
+                              <strong>No customers found.</strong>
+                              <span>Try a broader search term or clear the active filters.</span>
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     )}
@@ -1560,6 +1620,8 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
           </form>
         </Drawer>
       )}
+
+      <AiChatWidget />
     </div>
   );
 };

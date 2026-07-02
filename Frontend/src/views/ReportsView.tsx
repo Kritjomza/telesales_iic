@@ -1,18 +1,81 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { apiService } from "../domain/apiService";
 import type { Customer, User } from "../domain/types";
-import { FileText, Calendar, TrendingUp, Key, ClipboardList } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  BarChart3,
+  Calendar,
+  ClipboardList,
+  FileText,
+  RefreshCw,
+  ShieldCheck,
+  Users
+} from "lucide-react";
 import { ForbiddenView } from "./ForbiddenView";
 
-type ReportTab = "operation" | "renewal" | "project-detail";
+type ReportTab = "operation" | "performance" | "renewal" | "project-detail";
+
+type DistributionItem = {
+  label: string;
+  value: number;
+  tone?: "blue" | "green" | "amber" | "red" | "slate";
+};
+
+const statusClassName = (status?: string) => (status || "unknown").toLowerCase().replace(/\s+/g, "-");
+
+const formatCount = (value: number) => new Intl.NumberFormat("en-US").format(value);
+
+const ReportDistribution: React.FC<{ title: string; items: DistributionItem[]; emptyText: string }> = ({
+  title,
+  items,
+  emptyText
+}) => {
+  const maxValue = Math.max(...items.map(item => item.value), 0);
+
+  return (
+    <section className="report-chart-panel" aria-label={title}>
+      <div className="report-section-heading">
+        <h3>{title}</h3>
+        <p>Distribution based on currently loaded report records.</p>
+      </div>
+      {items.length > 0 ? (
+        <div className="report-bars">
+          {items.map(item => (
+            <div className="report-bar-row" key={item.label}>
+              <div className="report-bar-label">
+                <span>{item.label}</span>
+                <strong>{formatCount(item.value)}</strong>
+              </div>
+              <div className="report-bar-track" aria-hidden="true">
+                <span
+                  className={`report-bar-fill ${item.tone || "slate"}`}
+                  style={{ width: `${maxValue ? Math.max((item.value / maxValue) * 100, 3) : 0}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="report-empty-state compact">
+          <BarChart3 size={18} />
+          <strong>No chart data</strong>
+          <span>{emptyText}</span>
+        </div>
+      )}
+    </section>
+  );
+};
 
 export const ReportsView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ReportTab>("operation");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [projectDetailSummary, setProjectDetailSummary] = useState<any[]>([]);
+  const [agentPerformance, setAgentPerformance] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isForbidden, setIsForbidden] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Renewal filter
   const [renewalFilterDays, setRenewalFilterDays] = useState(30);
@@ -21,6 +84,7 @@ export const ReportsView: React.FC = () => {
     try {
       setIsLoading(true);
       setIsForbidden(false);
+      setLoadError(null);
       const [custs, uList, reportData] = await Promise.all([
         apiService.getCustomers(),
         apiService.getUsers(),
@@ -28,12 +92,14 @@ export const ReportsView: React.FC = () => {
       ]);
       setCustomers(custs);
       setUsers(uList);
-      setProjectDetailSummary(reportData.projectLedger);
+      setProjectDetailSummary(reportData.projectLedger || []);
+      setAgentPerformance(reportData.agentPerformance || []);
     } catch (err: any) {
       if (err.message?.includes("403") || err.message?.includes("Forbidden")) {
         setIsForbidden(true);
       } else {
         console.error("Failed to load reports data", err);
+        setLoadError("Report data could not be loaded. Please retry or contact an administrator.");
       }
     } finally {
       setIsLoading(false);
@@ -57,8 +123,6 @@ export const ReportsView: React.FC = () => {
     }));
   }, [customers]);
 
-
-
   // 4. Renewal summary list
   const renewalSummary = useMemo(() => {
     return customers
@@ -74,124 +138,345 @@ export const ReportsView: React.FC = () => {
       .sort((a, b) => a.renewalDays - b.renewalDays);
   }, [customers, renewalFilterDays]);
 
+  const reportSummary = useMemo(() => {
+    const activeCustomers = customers.filter(customer => customer.is_active).length;
+    const renewalRisk = customers.filter(customer => customer.is_active && customer.renewalDays <= 30).length;
+    const statusCounts = operationReport.reduce<Record<string, number>>((acc, item) => {
+      acc[item.status] = (acc[item.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      activeCustomers,
+      inactiveCustomers: customers.length - activeCustomers,
+      renewalRisk,
+      statusCounts
+    };
+  }, [customers, operationReport]);
+
+  const statusDistribution = useMemo<DistributionItem[]>(() => {
+    return Object.entries(reportSummary.statusCounts)
+      .map(([label, value]) => ({
+        label,
+        value,
+        tone:
+          label.toLowerCase() === "win" || label.toLowerCase() === "sent"
+            ? "green" as const
+            : label.toLowerCase() === "lost"
+              ? "red" as const
+              : label.toLowerCase() === "wait"
+                ? "amber" as const
+                : "blue" as const
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [reportSummary.statusCounts]);
+
+  const renewalDistribution = useMemo<DistributionItem[]>(() => {
+    const buckets = [
+      { label: "0-15 days", value: renewalSummary.filter(item => item.renewalDays <= 15).length, tone: "red" as const },
+      {
+        label: "16-30 days",
+        value: renewalSummary.filter(item => item.renewalDays > 15 && item.renewalDays <= 30).length,
+        tone: "amber" as const
+      },
+      {
+        label: "31-60 days",
+        value: renewalSummary.filter(item => item.renewalDays > 30 && item.renewalDays <= 60).length,
+        tone: "blue" as const
+      },
+      {
+        label: "61-90 days",
+        value: renewalSummary.filter(item => item.renewalDays > 60 && item.renewalDays <= 90).length,
+        tone: "slate" as const
+      }
+    ];
+
+    return buckets.filter(bucket => bucket.value > 0);
+  }, [renewalSummary]);
+
   if (isForbidden) {
     return <ForbiddenView />;
   }
 
   return (
-    <div className="workspace-view">
-      <header className="topbar">
+    <div className="workspace-view reports-workspace">
+      <header className="topbar reports-topbar">
         <div>
-          <p>Report / List</p>
+          <p>Report / Intelligence</p>
           <h1>System Reports</h1>
+          <span>Operational visibility across customers, renewals, performance, and project ledger data.</span>
         </div>
       </header>
 
-      {/* Sub-tab navigation */}
-      <div className="reports-tab-nav">
-        <button 
-          className={`report-tab-btn ${activeTab === "operation" ? "active" : ""}`}
-          onClick={() => setActiveTab("operation")}
-          type="button"
-        >
-          <ClipboardList size={15} />
-          Operation Report
-        </button>
+      <main className="content reports-content animate-fade-in">
+        <div className="reports-tab-nav" role="tablist" aria-label="Report sections">
+          <button
+            className={`report-tab-btn ${activeTab === "operation" ? "active" : ""}`}
+            onClick={() => setActiveTab("operation")}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "operation"}
+          >
+            <ClipboardList size={15} />
+            Operation
+          </button>
+          <button
+            className={`report-tab-btn ${activeTab === "performance" ? "active" : ""}`}
+            onClick={() => setActiveTab("performance")}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "performance"}
+          >
+            <Activity size={15} />
+            Performance
+          </button>
+          <button
+            className={`report-tab-btn ${activeTab === "renewal" ? "active" : ""}`}
+            onClick={() => setActiveTab("renewal")}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "renewal"}
+          >
+            <Calendar size={15} />
+            Renewal
+          </button>
+          <button
+            className={`report-tab-btn ${activeTab === "project-detail" ? "active" : ""}`}
+            onClick={() => setActiveTab("project-detail")}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "project-detail"}
+          >
+            <FileText size={15} />
+            Project Details
+          </button>
+        </div>
 
-        <button 
-          className={`report-tab-btn ${activeTab === "renewal" ? "active" : ""}`}
-          onClick={() => setActiveTab("renewal")}
-          type="button"
-        >
-          <Calendar size={15} />
-          Summary Renewal
-        </button>
-        <button 
-          className={`report-tab-btn ${activeTab === "project-detail" ? "active" : ""}`}
-          onClick={() => setActiveTab("project-detail")}
-          type="button"
-        >
-          <FileText size={15} />
-          Project Details
-        </button>
-      </div>
-
-      <main className="content animate-fade-in">
         {isLoading ? (
-          <div className="panel" style={{ padding: "32px", textAlign: "center" }}>
-            Loading report data...
-          </div>
+          <section className="report-loading-panel" aria-live="polite">
+            <div className="report-loading-copy">
+              <BarChart3 size={20} />
+              <div>
+                <strong>Loading report data</strong>
+                <span>Preparing customer, renewal, and ledger records.</span>
+              </div>
+            </div>
+            <div className="table-skeleton-list" aria-hidden="true">
+              {[0, 1, 2, 3].map(row => (
+                <div className="table-skeleton-row" key={row}>
+                  <span className="skeleton" />
+                  <span className="skeleton" />
+                  <span className="skeleton" />
+                  <span className="skeleton" />
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : loadError ? (
+          <section className="report-empty-state report-error-state" role="alert">
+            <AlertTriangle size={22} />
+            <strong>Unable to load reports</strong>
+            <span>{loadError}</span>
+            <button className="secondary-button" onClick={loadData} type="button">
+              <RefreshCw size={14} />
+              Retry
+            </button>
+          </section>
         ) : (
           <>
-            {/* REPORT 1: OPERATION REPORT */}
             {activeTab === "operation" && (
-              <div className="panel animate-fade-in">
-                <div className="panel-header">
-                  <h2>Operations Log</h2>
-                  <p>Overall state and metadata history of all business customer entities.</p>
+              <section className="report-panel animate-fade-in" role="tabpanel">
+                <div className="report-panel-header">
+                  <div>
+                    <h2>Operations Report</h2>
+                    <p>Customer state, business type, active flag, and latest metadata update.</p>
+                  </div>
+                  <span className="report-count-pill">{formatCount(operationReport.length)} records</span>
                 </div>
-                <div className="table-wrap">
-                  <table className="corporate-table" aria-label="Customer operations log table">
+                <div className="report-analytics-grid">
+                  <ReportDistribution
+                    title="Status Distribution"
+                    items={statusDistribution}
+                    emptyText="No customer statuses are available for the operation report."
+                  />
+                  <section className="report-insight-panel" aria-label="Operation summary">
+                    <div className="report-section-heading">
+                      <h3>Operational Health</h3>
+                      <p>Current active and inactive customer coverage.</p>
+                    </div>
+                    <div className="report-health-grid">
+                      <div>
+                        <span>Active</span>
+                        <strong>{formatCount(reportSummary.activeCustomers)}</strong>
+                      </div>
+                      <div>
+                        <span>Inactive</span>
+                        <strong>{formatCount(reportSummary.inactiveCustomers)}</strong>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+                <div className="table-wrap report-table-wrap">
+                  <table className="corporate-table report-table" aria-label="Customer operations log table">
                     <thead>
                       <tr>
-                        <th style={{ width: "5%" }}>No.</th>
-                        <th style={{ width: "35%" }}>Customer</th>
+                        <th style={{ width: "64px" }}>No.</th>
+                        <th style={{ width: "34%" }}>Customer</th>
                         <th style={{ width: "20%" }}>Business</th>
-                        <th style={{ width: "15%" }}>Status</th>
-                        <th style={{ width: "15%" }}>Last Update</th>
-                        <th style={{ width: "10%" }}>Active</th>
+                        <th style={{ width: "14%" }}>Status</th>
+                        <th style={{ width: "16%" }}>Last Update</th>
+                        <th style={{ width: "92px" }}>Active</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {operationReport.map((item, index) => (
-                        <tr key={item.id}>
-                          <td>{index + 1}</td>
-                          <td><strong>{item.name}</strong><br /><span className="subtext">{item.address}</span></td>
-                          <td>{item.business}</td>
-                          <td>
-                            <span className={`status-badge ${item.status.toLowerCase()}`}>{item.status}</span>
+                      {operationReport.length > 0 ? (
+                        operationReport.map((item, index) => (
+                          <tr key={item.id}>
+                            <td className="numeric-cell">{index + 1}</td>
+                            <td>
+                              <strong>{item.name}</strong>
+                              <span className="subtext">{item.address}</span>
+                            </td>
+                            <td>{item.business}</td>
+                            <td>
+                              <span className={`status-badge ${statusClassName(item.status)}`}>{item.status}</span>
+                            </td>
+                            <td className="date-cell">{item.updatedAt}</td>
+                            <td>
+                              <span className={`report-state-pill ${item.is_active ? "active" : "inactive"}`}>
+                                {item.is_active ? "Yes" : "No"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6}>
+                            <div className="report-empty-state compact">
+                              <ClipboardList size={18} />
+                              <strong>No operation records</strong>
+                              <span>No customers were returned for this report.</span>
+                            </div>
                           </td>
-                          <td>{item.updatedAt}</td>
-                          <td>{item.is_active ? "Yes" : "No"}</td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </section>
             )}
 
-
-
-            {/* REPORT 4: SUMMARY RENEWAL */}
-            {activeTab === "renewal" && (
-              <div className="panel animate-fade-in">
-                <div className="panel-header split">
+            {activeTab === "performance" && (
+              <section className="report-panel animate-fade-in" role="tabpanel">
+                <div className="report-panel-header">
                   <div>
-                    <h2>Antivirus Licensing Renewal Monitor</h2>
-                    <p>List of active client nodes whose licenses require immediate extension.</p>
+                    <h2>Performance Report</h2>
+                    <p>Agent performance records returned by the existing report endpoint.</p>
                   </div>
-                  <div className="filter-pill-container">
-                    {[30, 60, 90].map(days => (
-                      <button 
-                        key={days} 
-                        className={`filter-pill ${renewalFilterDays === days ? "active" : ""}`}
-                        onClick={() => setRenewalFilterDays(days)}
-                        type="button"
-                      >
-                        {days} Days
-                      </button>
-                    ))}
-                  </div>
+                  <span className="report-count-pill">{formatCount(agentPerformance.length)} records</span>
                 </div>
-                <div className="table-wrap">
-                  <table className="corporate-table" aria-label="Licensing renewal monitor table">
+                <div className="table-wrap report-table-wrap">
+                  <table className="corporate-table report-table" aria-label="Agent performance report table">
                     <thead>
                       <tr>
-                        <th style={{ width: "5%" }}>No.</th>
+                        <th style={{ width: "64px" }}>No.</th>
+                        <th>Agent</th>
+                        <th>Role</th>
+                        <th className="numeric-cell">Assigned</th>
+                        <th className="numeric-cell">Completed</th>
+                        <th className="numeric-cell">Win</th>
+                        <th className="numeric-cell">Lost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {agentPerformance.length > 0 ? (
+                        agentPerformance.map((item, index) => (
+                          <tr key={item.id || item.userId || item.name || index}>
+                            <td className="numeric-cell">{index + 1}</td>
+                            <td><strong>{item.name || item.agentName || item.username || "-"}</strong></td>
+                            <td>{item.role || item.roles || "-"}</td>
+                            <td className="numeric-cell">{item.assigned ?? item.totalAssigned ?? item.total ?? "-"}</td>
+                            <td className="numeric-cell">{item.completed ?? item.closed ?? item.done ?? "-"}</td>
+                            <td className="numeric-cell">{item.win ?? item.won ?? item.success ?? "-"}</td>
+                            <td className="numeric-cell">{item.lost ?? item.rejected ?? "-"}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={7}>
+                            <div className="report-empty-state compact">
+                              <Users size={18} />
+                              <strong>No performance rows</strong>
+                              <span>The report endpoint did not return agent performance data.</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {activeTab === "renewal" && (
+              <section className="report-panel animate-fade-in" role="tabpanel">
+                <div className="report-panel-header">
+                  <div>
+                    <h2>Renewal Report</h2>
+                    <p>Active customer licenses that require near-term follow-up.</p>
+                  </div>
+                  <div className="report-filter-toolbar" aria-label="Renewal range filter">
+                    <span>Range</span>
+                    <div className="filter-pill-container">
+                      {[30, 60, 90].map(days => (
+                        <button
+                          key={days}
+                          className={`filter-pill ${renewalFilterDays === days ? "active" : ""}`}
+                          onClick={() => setRenewalFilterDays(days)}
+                          type="button"
+                        >
+                          {days} Days
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="report-analytics-grid">
+                  <ReportDistribution
+                    title="Renewal Risk Windows"
+                    items={renewalDistribution}
+                    emptyText={`No active renewals are inside the selected ${renewalFilterDays}-day window.`}
+                  />
+                  <section className="report-insight-panel" aria-label="Renewal summary">
+                    <div className="report-section-heading">
+                      <h3>Priority Queue</h3>
+                      <p>Closest active renewal inside the selected range.</p>
+                    </div>
+                    {renewalSummary[0] ? (
+                      <div className="report-priority-customer">
+                        <ShieldCheck size={18} />
+                        <div>
+                          <strong>{renewalSummary[0].name}</strong>
+                          <span>{renewalSummary[0].renewalDays} days remaining</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="report-empty-state compact">
+                        <Calendar size={18} />
+                        <strong>No priority renewal</strong>
+                        <span>No active customers expire inside this window.</span>
+                      </div>
+                    )}
+                  </section>
+                </div>
+                <div className="table-wrap report-table-wrap">
+                  <table className="corporate-table report-table" aria-label="Licensing renewal monitor table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: "64px" }}>No.</th>
                         <th style={{ width: "35%" }}>Customer</th>
                         <th style={{ width: "20%" }}>Business Type</th>
-                        <th style={{ width: "15%" }}>Days Remaining</th>
+                        <th className="numeric-cell" style={{ width: "15%" }}>Days Remaining</th>
                         <th style={{ width: "15%" }}>Estimated Expire</th>
                         <th style={{ width: "10%" }}>Status</th>
                       </tr>
@@ -200,78 +485,88 @@ export const ReportsView: React.FC = () => {
                       {renewalSummary.length > 0 ? (
                         renewalSummary.map((item, index) => (
                           <tr key={item.id} className={item.renewalDays <= 15 ? "urgent-row" : ""}>
-                            <td>{index + 1}</td>
+                            <td className="numeric-cell">{index + 1}</td>
                             <td><strong>{item.name}</strong></td>
                             <td>{item.business}</td>
-                            <td>
+                            <td className="numeric-cell">
                               <strong className={item.renewalDays <= 15 ? "text-danger-strong" : "text-warning-strong"}>
                                 {item.renewalDays} days
                               </strong>
                             </td>
-                            <td>{item.expireDate}</td>
-                            <td><span className={`status-badge ${item.status.toLowerCase()}`}>{item.status}</span></td>
+                            <td className="date-cell">{item.expireDate}</td>
+                            <td><span className={`status-badge ${statusClassName(item.status)}`}>{item.status}</span></td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={6} style={{ textAlign: "center", padding: "24px 0" }}>
-                            No clients expiring within {renewalFilterDays} days.
+                          <td colSpan={6}>
+                            <div className="report-empty-state compact">
+                              <Calendar size={18} />
+                              <strong>No renewals in range</strong>
+                              <span>No clients expire within {renewalFilterDays} days.</span>
+                            </div>
                           </td>
                         </tr>
                       )}
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </section>
             )}
 
-            {/* REPORT 5: SUMMARY PROJECT DETAIL */}
             {activeTab === "project-detail" && (
-              <div className="panel animate-fade-in">
-                <div className="panel-header">
-                  <h2>Project Implementation & License Ledger</h2>
-                  <p>Unified catalog tracking all products, licenses, and renewal projects currently in progress.</p>
+              <section className="report-panel animate-fade-in" role="tabpanel">
+                <div className="report-panel-header">
+                  <div>
+                    <h2>Project Detail Report</h2>
+                    <p>Project implementation and license ledger records currently in progress.</p>
+                  </div>
+                  <span className="report-count-pill">{formatCount(projectDetailSummary.length)} records</span>
                 </div>
-                <div className="table-wrap">
-                  <table className="corporate-table" aria-label="Implementation ledger table">
+                <div className="table-wrap report-table-wrap">
+                  <table className="corporate-table report-table" aria-label="Implementation ledger table">
                     <thead>
                       <tr>
-                        <th style={{ width: "5%" }}>No.</th>
+                        <th style={{ width: "64px" }}>No.</th>
                         <th style={{ width: "25%" }}>Customer Name</th>
                         <th style={{ width: "15%" }}>Contact Person</th>
                         <th style={{ width: "35%" }}>Project / License Description</th>
                         <th style={{ width: "15%" }}>Exp Date</th>
-                        <th style={{ width: "5%" }}>Status</th>
+                        <th style={{ width: "10%" }}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
                       {projectDetailSummary.length > 0 ? (
                         projectDetailSummary.map((item, index) => (
                           <tr key={index}>
-                            <td>{index + 1}</td>
+                            <td className="numeric-cell">{index + 1}</td>
                             <td><strong>{item.customerName}</strong></td>
                             <td>{item.contactName}</td>
                             <td>
                               <span className={`record-type-badge ${item.type === "Project" ? "project" : "license"}`}>
                                 {item.type}
                               </span>
-                              <strong style={{ display: "block" }}>{item.details}</strong>
+                              <strong className="report-description-cell">{item.details}</strong>
                             </td>
-                            <td>{item.closeDate}</td>
-                            <td><span className={`status-badge ${item.status.toLowerCase()}`}>{item.status}</span></td>
+                            <td className="date-cell">{item.closeDate}</td>
+                            <td><span className={`status-badge ${statusClassName(item.status)}`}>{item.status}</span></td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={6} style={{ textAlign: "center", padding: "24px 0" }}>
-                            No project detail ledger items found.
+                          <td colSpan={6}>
+                            <div className="report-empty-state compact">
+                              <FileText size={18} />
+                              <strong>No ledger records</strong>
+                              <span>No project detail ledger items found.</span>
+                            </div>
                           </td>
                         </tr>
                       )}
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </section>
             )}
           </>
         )}
