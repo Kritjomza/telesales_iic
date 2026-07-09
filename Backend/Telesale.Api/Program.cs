@@ -101,6 +101,9 @@ builder.Services.AddScoped<Telesale.Api.Services.IImportValidationService, Teles
 builder.Services.AddScoped<Telesale.Api.Services.IImportDuplicateDetectionService, Telesale.Api.Services.ImportDuplicateDetectionService>();
 builder.Services.AddScoped<Telesale.Api.Services.IImportColumnMappingService, Telesale.Api.Services.ImportColumnMappingService>();
 builder.Services.AddScoped<Telesale.Api.Services.IImportPolicyService, Telesale.Api.Services.ImportPolicyService>();
+builder.Services.AddScoped<Telesale.Api.Services.ILocalGovernmentImportParserService, Telesale.Api.Services.LocalGovernmentImportParserService>();
+builder.Services.AddScoped<Telesale.Api.Services.ILocalGovernmentImportPreviewService, Telesale.Api.Services.LocalGovernmentImportPreviewService>();
+builder.Services.AddScoped<Telesale.Api.Services.ILocalGovernmentImportConfirmService, Telesale.Api.Services.LocalGovernmentImportConfirmService>();
 
 var app = builder.Build();
 

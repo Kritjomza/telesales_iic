@@ -142,6 +142,138 @@ describe("ATS React workspace", () => {
     expect(within(table).queryByText("Siam Healthcare")).not.toBeInTheDocument();
   });
 
+  it("previews and confirms local government import from the manage toolbar", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes("/api/import/local-government/preview")) {
+        expect(options?.method).toBe("POST");
+        expect((options?.body as FormData).get("file")).toBeInstanceOf(File);
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            totalRows: 2,
+            validRows: 1,
+            duplicateRows: 1,
+            errorRows: 0,
+            estimatedCustomersToInsert: 1,
+            estimatedDetailsToInsert: 3,
+            warnings: [],
+            errors: [],
+            rows: [
+              {
+                rowNumber: 2,
+                organizationName: "เทศบาลตัวอย่าง",
+                normalizedOrganizationName: "เทศบาลตัวอย่าง",
+                isDuplicate: false,
+                customerPreview: { name: "เทศบาลตัวอย่าง", phone: "02-111-1111" },
+                detailPreviews: [{ contactName: "นายกหนึ่ง", contactPosition: "นายก" }],
+                warnings: [],
+                errors: []
+              }
+            ]
+          })
+        });
+      }
+      if (url.includes("/api/import/local-government/confirm")) {
+        expect(options?.method).toBe("POST");
+        expect((options?.body as FormData).get("file")).toBeInstanceOf(File);
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            totalRows: 2,
+            insertedCustomers: 1,
+            insertedDetails: 3,
+            skippedDuplicates: 1,
+            errorRows: 0,
+            warnings: [],
+            errors: [],
+            rows: []
+          })
+        });
+      }
+      if (url.includes("/api/customers")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([
+            {
+              id: 1,
+              name: "Apex Manufacturing",
+              address: "Bangkok",
+              bt_type: "Commercial",
+              sale_id: 1,
+              telesale_id: 2,
+              status: "Called",
+              renewalDays: 45,
+              hasCostSheet: false,
+              is_active: true,
+              start_dt: "2026-06-01",
+              primary_contact_name: "Nok",
+              primary_contact_email: "nok@example.com",
+              primary_contact_tel: "0812345678",
+              primary_contact_tel_office: ""
+            }
+          ]))
+        });
+      }
+      if (url.includes("/api/users")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([]))
+        });
+      }
+      if (url.includes("/api/masterdata/business-types")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([]))
+        });
+      }
+      if (url.includes("/api/masterdata/competitors")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify([]))
+        });
+      }
+      if (url.includes("/api/auth/me")) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify({
+            id: 1,
+            username: "AR9999",
+            name: "Narin Admin",
+            email: "narin@iic.co.th",
+            roles: "Super Admin",
+            avatar: "NA"
+          }))
+        });
+      }
+      return Promise.resolve({ ok: true, text: () => Promise.resolve("") });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    await screen.findByText("Apex Manufacturing");
+    await user.click(screen.getByRole("button", { name: /Import เทศบาล\/อปท\./i }));
+
+    expect(screen.getByRole("dialog", { name: /Import เทศบาล\/อปท\./i })).toBeInTheDocument();
+
+    const file = new File(["ลำดับ,ชื่อหน่วยงาน"], "local-government.csv", { type: "text/csv" });
+    await user.upload(screen.getByLabelText(/เลือกไฟล์เทศบาล\/อปท\./i), file);
+    await user.click(screen.getByRole("button", { name: "ตรวจสอบไฟล์" }));
+
+    expect(await screen.findByText("แถวทั้งหมด")).toBeInTheDocument();
+    expect(screen.getByText("แถวที่จะเพิ่ม")).toBeInTheDocument();
+    expect(screen.getByText("รายชื่อที่จะเพิ่ม")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "ยืนยันนำเข้า" }));
+
+    expect((await screen.findAllByText("นำเข้าสำเร็จ")).length).toBeGreaterThan(0);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/import/local-government/confirm",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
   it("labels row workflow actions with the customer name", async () => {
     render(<App />);
 

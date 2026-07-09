@@ -161,3 +161,71 @@ export interface PaginatedResponse<T> {
     incomplete?: number;
   };
 }
+
+export interface LocalGovernmentImportIssue {
+  rowNumber?: number | null;
+  field: string;
+  message: string;
+}
+
+export interface LocalGovernmentCustomerPreview {
+  name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  status?: string;
+  createType?: string;
+  isActive?: boolean;
+}
+
+export interface LocalGovernmentDetailPreview {
+  contactName?: string | null;
+  contactTel?: string | null;
+  contactPosition: string;
+  contactTelOffice?: string | null;
+  isActive?: boolean;
+}
+
+export interface LocalGovernmentImportRowPreview {
+  rowNumber: number;
+  organizationName?: string | null;
+  normalizedOrganizationName?: string | null;
+  isDuplicate: boolean;
+  customerPreview?: LocalGovernmentCustomerPreview | null;
+  detailPreviews: LocalGovernmentDetailPreview[];
+  warnings: LocalGovernmentImportIssue[];
+  errors: LocalGovernmentImportIssue[];
+}
+
+export interface LocalGovernmentImportPreviewSummary {
+  totalRows: number;
+  validRows: number;
+  duplicateRows: number;
+  errorRows: number;
+  estimatedCustomersToInsert: number;
+  estimatedDetailsToInsert: number;
+  warnings: LocalGovernmentImportIssue[];
+  errors: LocalGovernmentImportIssue[];
+  rows: LocalGovernmentImportRowPreview[];
+}
+
+export interface LocalGovernmentImportRowResult {
+  rowNumber: number;
+  organizationName?: string | null;
+  normalizedOrganizationName?: string | null;
+  status: "inserted" | "duplicate_skipped" | "error_skipped";
+  insertedCustomerId?: number | null;
+  insertedDetailCount: number;
+  warnings: LocalGovernmentImportIssue[];
+  errors: LocalGovernmentImportIssue[];
+}
+
+export interface LocalGovernmentImportConfirmResult {
+  totalRows: number;
+  insertedCustomers: number;
+  insertedDetails: number;
+  skippedDuplicates: number;
+  errorRows: number;
+  warnings: LocalGovernmentImportIssue[];
+  errors: LocalGovernmentImportIssue[];
+  rows: LocalGovernmentImportRowResult[];
+}

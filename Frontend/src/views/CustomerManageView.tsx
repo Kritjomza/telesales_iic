@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { apiService } from "../domain/apiService";
 import { ImportMasterDataModal } from "../components/ImportMasterDataModal";
+import { LocalGovernmentImportModal } from "../components/LocalGovernmentImportModal";
 import { AiChatWidget } from "../components/AiChatWidget";
 import { CUSTOMER_CALL_STATUS } from "../domain/types";
 import type { Customer, CustomerCallStatus, ContactDetail, DetailDevice, DetailProject, User, Category, Competitor } from "../domain/types";
@@ -103,6 +104,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
 
   // Import flow states
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isLocalGovernmentImportOpen, setIsLocalGovernmentImportOpen] = useState(false);
 
   // Contact Drawer triggers
   const [isContactDrawerOpen, setIsContactDrawerOpen] = useState(false);
@@ -711,14 +713,24 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
             </div>
             <div className="topbar-actions">
               {(isAdmin || isSupervisor) && (
-                <button
-                  className="secondary-button"
-                  onClick={() => setIsImportModalOpen(true)}
-                  type="button"
-                >
-                  <Upload size={15} />
-                  Import
-                </button>
+                <>
+                  <button
+                    className="secondary-button"
+                    onClick={() => setIsLocalGovernmentImportOpen(true)}
+                    type="button"
+                  >
+                    <FileSpreadsheet size={15} />
+                    Import เทศบาล/อปท.
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={() => setIsImportModalOpen(true)}
+                    type="button"
+                  >
+                    <Upload size={15} />
+                    Import
+                  </button>
+                </>
               )}
               <button className="primary-button" onClick={() => { setActiveCustomer(null); setIsCustomerDrawerOpen(true); }} type="button">
                 <Plus size={15} />
@@ -1540,6 +1552,15 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
           isOpen={isImportModalOpen}
           onClose={() => setIsImportModalOpen(false)}
           tableType="manage"
+          onImportSuccess={refreshCustomers}
+          showToast={showToast}
+        />
+      )}
+
+      {isLocalGovernmentImportOpen && (
+        <LocalGovernmentImportModal
+          isOpen={isLocalGovernmentImportOpen}
+          onClose={() => setIsLocalGovernmentImportOpen(false)}
           onImportSuccess={refreshCustomers}
           showToast={showToast}
         />

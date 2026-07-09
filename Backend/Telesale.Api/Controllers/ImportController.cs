@@ -33,6 +33,8 @@ public class ImportController : ControllerBase
     private readonly IImportDuplicateDetectionService _duplicateService;
     private readonly IImportColumnMappingService _columnMappingService;
     private readonly IImportPolicyService _policyService;
+    private readonly ILocalGovernmentImportPreviewService _localGovernmentPreviewService;
+    private readonly ILocalGovernmentImportConfirmService _localGovernmentConfirmService;
     private readonly TelesaleDbContext _db;
     private readonly ILogger<ImportController> _logger;
     private readonly Microsoft.AspNetCore.Hosting.IWebHostEnvironment _env;
@@ -43,6 +45,8 @@ public class ImportController : ControllerBase
         IImportDuplicateDetectionService duplicateService,
         IImportColumnMappingService columnMappingService,
         IImportPolicyService policyService,
+        ILocalGovernmentImportPreviewService localGovernmentPreviewService,
+        ILocalGovernmentImportConfirmService localGovernmentConfirmService,
         TelesaleDbContext db,
         ILogger<ImportController> logger,
         Microsoft.AspNetCore.Hosting.IWebHostEnvironment env)
@@ -52,6 +56,8 @@ public class ImportController : ControllerBase
         _duplicateService = duplicateService;
         _columnMappingService = columnMappingService;
         _policyService = policyService;
+        _localGovernmentPreviewService = localGovernmentPreviewService;
+        _localGovernmentConfirmService = localGovernmentConfirmService;
         _db = db;
         _logger = logger;
         _env = env;
@@ -156,6 +162,124 @@ public class ImportController : ControllerBase
             return NotFound(new { message = "Template file not found." });
         }
         return PhysicalFile(path, GetMimeType(path), filename);
+    }
+
+    [HttpGet("templates/local-government")]
+    public IActionResult DownloadLocalGovernmentTemplate([FromQuery] string format = "csv")
+    {
+        if (!format.Equals("csv", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { message = "Local government template is available as CSV only." });
+        }
+
+        var filename = "local-government-import-template.csv";
+        var templateDir = Path.Combine(_env.ContentRootPath, "templates");
+        var path = Path.GetFullPath(Path.Combine(templateDir, filename));
+        if (!path.StartsWith(templateDir, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest("Invalid template path.");
+        }
+        if (!System.IO.File.Exists(path))
+        {
+            return NotFound(new { message = "Template file not found." });
+        }
+        return PhysicalFile(path, GetMimeType(path), filename);
+    }
+
+    [HttpPost("local-government/preview")]
+    public async Task<IActionResult> PreviewLocalGovernment(IFormFile file, CancellationToken cancellationToken = default)
+    {
+        if (!User.IsAdmin())
+        {
+            return Forbid();
+        }
+
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "No file uploaded or file is empty." });
+        }
+
+        if (file.Length > MaxFileSizeBytes)
+        {
+            return BadRequest(new { message = "File size exceeds the 10MB limit." });
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (extension != ".csv" && extension != ".xlsx")
+        {
+            return BadRequest(new { message = "Unsupported file format. Please upload a .csv or .xlsx file." });
+        }
+
+        try
+        {
+            using (var uploadStream = file.OpenReadStream())
+            {
+                if (!ValidateFileMagicBytes(uploadStream, extension))
+                {
+                    return BadRequest(new { message = "File content validation failed. The file structure does not match the extension." });
+                }
+            }
+
+            using var stream = file.OpenReadStream();
+            var preview = await _localGovernmentPreviewService.PreviewFileAsync(stream, extension, cancellationToken);
+            return Ok(preview);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to preview local government import file {FileName}", file.FileName);
+            return BadRequest(new { message = $"Failed to parse the file: {ex.Message}" });
+        }
+    }
+
+    [HttpPost("local-government/confirm")]
+    public async Task<IActionResult> ConfirmLocalGovernment(IFormFile file, CancellationToken cancellationToken = default)
+    {
+        if (!User.IsAdmin())
+        {
+            return Forbid();
+        }
+
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "No file uploaded or file is empty." });
+        }
+
+        if (file.Length > MaxFileSizeBytes)
+        {
+            return BadRequest(new { message = "File size exceeds the 10MB limit." });
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (extension != ".csv" && extension != ".xlsx")
+        {
+            return BadRequest(new { message = "Unsupported file format. Please upload a .csv or .xlsx file." });
+        }
+
+        var userId = User.GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            using (var uploadStream = file.OpenReadStream())
+            {
+                if (!ValidateFileMagicBytes(uploadStream, extension))
+                {
+                    return BadRequest(new { message = "File content validation failed. The file structure does not match the extension." });
+                }
+            }
+
+            using var stream = file.OpenReadStream();
+            var result = await _localGovernmentConfirmService.ConfirmFileAsync(stream, extension, userId.Value, cancellationToken);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to confirm local government import file {FileName}", file.FileName);
+            return BadRequest(new { message = $"Failed to import the file: {ex.Message}" });
+        }
     }
 
     [HttpPost("manage")]

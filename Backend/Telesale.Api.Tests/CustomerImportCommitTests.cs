@@ -96,6 +96,8 @@ public class CustomerImportCommitTests
             duplicateService,
             new ImportColumnMappingService(aiService),
             new ImportPolicyService(),
+            new LocalGovernmentImportPreviewService(db, new LocalGovernmentImportParserService()),
+            new LocalGovernmentImportConfirmService(db, new LocalGovernmentImportParserService()),
             db,
             NullLogger<ImportController>.Instance,
             new TestWebHostEnvironment());

@@ -12,7 +12,9 @@ import type {
   Profile,
   CostSheet,
   PaginatedResponse,
-  CustomerCallStatus
+  CustomerCallStatus,
+  LocalGovernmentImportConfirmResult,
+  LocalGovernmentImportPreviewSummary
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
@@ -673,7 +675,7 @@ export const apiService = {
     const mappingsJson = JSON.stringify(mappings);
     return `${API_BASE}/import/customers/export-errors?fileId=${encodeURIComponent(fileId)}&mappingsJson=${encodeURIComponent(mappingsJson)}`;
   },
-  async downloadTemplate(type: "manage" | "profile" | "antivirus-price-list", format: "xlsx" | "csv" = "xlsx"): Promise<void> {
+  async downloadTemplate(type: "manage" | "profile" | "antivirus-price-list" | "local-government", format: "xlsx" | "csv" = "xlsx"): Promise<void> {
     const response = await fetch(`${API_BASE}/import/templates/${type}?format=${format}`, {
       method: "GET"
     });
@@ -689,6 +691,44 @@ export const apiService = {
     a.click();
     a.remove();
     window.URL.revokeObjectURL(url);
+  },
+
+  async previewLocalGovernmentImport(file: File): Promise<LocalGovernmentImportPreviewSummary> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${API_BASE}/import/local-government/preview`, {
+      method: "POST",
+      body: formData
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = "Failed to preview local government import.";
+      try {
+        const errJson = JSON.parse(errorText);
+        errorMessage = errJson.message || errorMessage;
+      } catch {}
+      throw new ApiError(response.status, errorMessage);
+    }
+    return response.json();
+  },
+
+  async confirmLocalGovernmentImport(file: File): Promise<LocalGovernmentImportConfirmResult> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${API_BASE}/import/local-government/confirm`, {
+      method: "POST",
+      body: formData
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = "Failed to import local government data.";
+      try {
+        const errJson = JSON.parse(errorText);
+        errorMessage = errJson.message || errorMessage;
+      } catch {}
+      throw new ApiError(response.status, errorMessage);
+    }
+    return response.json();
   },
 
   async getImportHistory(): Promise<any[]> {

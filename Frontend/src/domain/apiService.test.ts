@@ -173,3 +173,71 @@ describe("apiService manual import contract", () => {
     );
   });
 });
+
+describe("apiService local government import contract", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({
+        totalRows: 1,
+        validRows: 1,
+        duplicateRows: 0,
+        errorRows: 0,
+        estimatedCustomersToInsert: 1,
+        estimatedDetailsToInsert: 2,
+        warnings: [],
+        errors: [],
+        rows: []
+      }),
+      blob: () => Promise.resolve(new Blob(["template"]))
+    }));
+  });
+
+  it("previews local government import with multipart file field", async () => {
+    const file = new File(["a,b"], "local-government.csv", { type: "text/csv" });
+
+    await apiService.previewLocalGovernmentImport(file);
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/import/local-government/preview",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.any(FormData)
+      })
+    );
+    const body = vi.mocked(fetch).mock.calls[0][1]?.body as FormData;
+    expect(body.get("file")).toBe(file);
+  });
+
+  it("confirms local government import with multipart file field", async () => {
+    const file = new File(["a,b"], "local-government.csv", { type: "text/csv" });
+
+    await apiService.confirmLocalGovernmentImport(file);
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/import/local-government/confirm",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.any(FormData)
+      })
+    );
+    const body = vi.mocked(fetch).mock.calls[0][1]?.body as FormData;
+    expect(body.get("file")).toBe(file);
+  });
+
+  it("downloads the local government CSV template", async () => {
+    const createObjectUrl = vi.fn(() => "blob:test");
+    const revokeObjectUrl = vi.fn();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    vi.stubGlobal("URL", { createObjectURL: createObjectUrl, revokeObjectURL: revokeObjectUrl });
+
+    await apiService.downloadTemplate("local-government", "csv");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/import/templates/local-government?format=csv",
+      expect.objectContaining({ method: "GET" })
+    );
+    clickSpy.mockRestore();
+  });
+});
