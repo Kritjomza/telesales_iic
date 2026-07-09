@@ -144,6 +144,16 @@ describe("ATS React workspace", () => {
 
   it("previews and confirms local government import from the manage toolbar", async () => {
     const user = userEvent.setup();
+    const previewRows = Array.from({ length: 30 }, (_, index) => ({
+      rowNumber: index + 2,
+      organizationName: `Local Gov ${index + 1}`,
+      normalizedOrganizationName: `Local Gov ${index + 1}`,
+      isDuplicate: false,
+      customerPreview: { name: `Local Gov ${index + 1}`, phone: "02-111-1111" },
+      detailPreviews: [{ contactName: `Contact ${index + 1}`, contactPosition: "Mayor" }],
+      warnings: [],
+      errors: []
+    }));
     const fetchMock = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
       if (url.includes("/api/import/local-government/preview")) {
         expect(options?.method).toBe("POST");
@@ -259,13 +269,13 @@ describe("ATS React workspace", () => {
 
     const file = new File(["ลำดับ,ชื่อหน่วยงาน"], "local-government.csv", { type: "text/csv" });
     await user.upload(screen.getByLabelText(/เลือกไฟล์เทศบาล\/อปท\./i), file);
-    await user.click(screen.getByRole("button", { name: "ตรวจสอบไฟล์" }));
+    await user.click(screen.getByRole("button", { name: "Analyze & Preview" }));
 
     expect(await screen.findByText("แถวทั้งหมด")).toBeInTheDocument();
-    expect(screen.getByText("แถวที่จะเพิ่ม")).toBeInTheDocument();
-    expect(screen.getByText("รายชื่อที่จะเพิ่ม")).toBeInTheDocument();
+    expect(screen.getByText("แถวพร้อมนำเข้า")).toBeInTheDocument();
+    expect(screen.queryByText("รายชื่อที่จะเพิ่ม")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "ยืนยันนำเข้า" }));
+    await user.click(screen.getByRole("button", { name: "Commit Import" }));
 
     expect((await screen.findAllByText("นำเข้าสำเร็จ")).length).toBeGreaterThan(0);
     expect(fetchMock).toHaveBeenCalledWith(
