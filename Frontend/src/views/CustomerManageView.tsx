@@ -31,6 +31,8 @@ import {
 interface CustomerManageViewProps {
   userRole: string;
   showToast: (msg: string, type: "success" | "error" | "info") => void;
+  initialAdvanceCustomer?: Customer | null;
+  onInitialAdvanceHandled?: () => void;
 }
 
 type SubView =
@@ -59,7 +61,12 @@ const missingFieldFilterLabels: Partial<Record<CustomerQuickFilter, string>> = {
   noEmail: missingFieldLabels.email
 };
 
-export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole, showToast }) => {
+export const CustomerManageView: React.FC<CustomerManageViewProps> = ({
+  userRole,
+  showToast,
+  initialAdvanceCustomer,
+  onInitialAdvanceHandled
+}) => {
   const isAdmin = isAdminRole(userRole);
   const isSupervisor = isSupervisorRole(userRole);
   const isAgent = isAgentRole(userRole);
@@ -101,6 +108,12 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
   const [isSavingAdvanceStatus, setIsSavingAdvanceStatus] = useState(false);
   const [advanceStatusError, setAdvanceStatusError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!initialAdvanceCustomer) return;
+    setAdvanceStatusCustomer(initialAdvanceCustomer);
+    setAdvanceStatusError(null);
+    onInitialAdvanceHandled?.();
+  }, [initialAdvanceCustomer, onInitialAdvanceHandled]);
 
   // Import flow states
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -536,6 +549,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
     const contactData = {
       contact_name: formData.get("contact_name") as string,
       contact_email: formData.get("contact_email") as string,
+      contact_position: formData.get("contact_position") as string,
       contact_tel: formData.get("contact_tel") as string,
       contact_tel_office: formData.get("contact_tel_office") as string,
     };
@@ -1119,6 +1133,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                       <th style={{ width: "5%" }}>No.</th>
                       <th style={{ width: "25%" }}>Name</th>
                       <th style={{ width: "25%" }}>Email</th>
+                      <th style={{ width: "25%" }}>Position</th>
                       <th style={{ width: "20%" }}>Tel / Tel Office</th>
                       <th style={{ width: "25%", textAlign: "right" }}>Actions</th>
                     </tr>
@@ -1130,6 +1145,7 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
                           <td>{index + 1}</td>
                           <td><strong>{item.contact_name}</strong></td>
                           <td>{item.contact_email}</td>
+                          <td>{item.contact_position}</td>
                           <td>{item.contact_tel} {item.contact_tel_office ? ` / ${item.contact_tel_office}` : ""}</td>
 
                           <td style={{ textAlign: "right" }}>
@@ -1575,34 +1591,40 @@ export const CustomerManageView: React.FC<CustomerManageViewProps> = ({ userRole
         >
           <form onSubmit={(e) => handleSaveContact(e, subView.customer.id)} className="corporate-form">
             <div className="form-group">
-              <label htmlFor="contact_name_person">Name *</label>
+              <label htmlFor="contact_name_person">Name</label>
               <input
                 id="contact_name_person"
                 name="contact_name"
                 type="text"
                 defaultValue={activeContact?.contact_name || ""}
-                required
               />
             </div>
             <div className="form-group">
-              <label htmlFor="contact_email_person">Email *</label>
+              <label htmlFor="contact_email_person">Email</label>
               <input
                 id="contact_email_person"
                 name="contact_email"
                 type="email"
                 defaultValue={activeContact?.contact_email || ""}
-                required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="contact_position_person">Position</label>
+              <input
+                id="contact_position_person"
+                name="contact_position"
+                type="text"
+                defaultValue={activeContact?.contact_position || ""}
               />
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label htmlFor="contact_tel_person">Mobile Tel *</label>
+                <label htmlFor="contact_tel_person">Mobile Tel</label>
                 <input
                   id="contact_tel_person"
                   name="contact_tel"
                   type="text"
                   defaultValue={activeContact?.contact_tel || ""}
-                  required
                 />
               </div>
               <div className="form-group">

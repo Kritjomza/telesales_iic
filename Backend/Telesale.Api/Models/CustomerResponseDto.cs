@@ -40,6 +40,7 @@ public class ContactResponseDto
     public string contact_email { get; set; } = "";
     public string contact_tel { get; set; } = "";
     public string contact_tel_office { get; set; } = "";
+    public string contact_position { get; set; } = "";
     public int point { get; set; }
     public int total_point { get; set; }
 }

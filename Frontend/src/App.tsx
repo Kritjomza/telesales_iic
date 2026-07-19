@@ -18,6 +18,7 @@ import { ForbiddenView } from "./views/ForbiddenView";
 import { ImportCustomersView } from "./views/ImportCustomersView";
 import { ImportHistoryView } from "./views/ImportHistoryView";
 import { canAccessGroup, canAccessView, normalizeRole } from "./domain/permissions";
+import type { Customer } from "./domain/types";
 const navigationGroups = [
   {
     label: "Master Data",
@@ -78,6 +79,7 @@ function App() {
   const [currentView, setCurrentView] = useState<string>("manage");
   const [activeReportTab, setActiveReportTab] = useState<ReportTab>("operation");
   const [activeMasterTable, setActiveMasterTable] = useState<MasterTableType>("profiles");
+  const [pendingAdvanceCustomer, setPendingAdvanceCustomer] = useState<Customer | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     "Master Data": false,
     "Customer": true,
@@ -110,6 +112,13 @@ function App() {
   }, []);
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+  const openReportCustomerAdvance = useCallback((customer: Customer) => {
+    setPendingAdvanceCustomer(customer);
+    setCurrentView("manage");
+  }, []);
+  const clearPendingAdvanceCustomer = useCallback(() => {
+    setPendingAdvanceCustomer(null);
   }, []);
   // Setup 401/403 callbacks and check session on mount
   useEffect(() => {
@@ -301,14 +310,23 @@ function App() {
               <ForbiddenView />
             )}
             {currentView === "manage" && (
-              <CustomerManageView userRole={currentUser.roles} showToast={showToast} />
+              <CustomerManageView
+                userRole={currentUser.roles}
+                showToast={showToast}
+                initialAdvanceCustomer={pendingAdvanceCustomer}
+                onInitialAdvanceHandled={clearPendingAdvanceCustomer}
+              />
             )}
 
             {currentView === "cost-sheet" && (
               <CostSheetView userRole={currentUser.roles} showToast={showToast} />
             )}
             {currentView === "reports" && (
-              <ReportsView activeTab={activeReportTab} onTabChange={setActiveReportTab} />
+              <ReportsView
+                activeTab={activeReportTab}
+                onTabChange={setActiveReportTab}
+                onAdvanceCustomer={openReportCustomerAdvance}
+              />
             )}
             {currentView === "master-data" && (
               <MasterDataView tableType={activeMasterTable} userRole={currentUser.roles} showToast={showToast} />

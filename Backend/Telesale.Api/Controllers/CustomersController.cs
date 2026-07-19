@@ -752,6 +752,7 @@ public class CustomersController : ControllerBase
                 contact_email = d.contact_email ?? "",
                 contact_tel = d.contact_tel ?? "",
                 contact_tel_office = d.contact_tel_office ?? "",
+                contact_position = d.contact_position ?? "",
                 point = 0,
                 total_point = 0
             })
@@ -780,9 +781,10 @@ public class CustomersController : ControllerBase
         {
             cust_id = id,
             contact_name = dto.contact_name,
-            contact_email = dto.contact_email ?? "",
-            contact_tel = dto.contact_tel ?? "",
+            contact_email = string.IsNullOrWhiteSpace(dto.contact_email) ? null : dto.contact_email,
+            contact_tel = string.IsNullOrWhiteSpace(dto.contact_tel) ? null : dto.contact_tel,
             contact_tel_office = dto.contact_tel_office ?? "",
+            contact_position = dto.contact_position ?? "",
             is_active = true,
             point = 0,
             total_point = 0,
@@ -796,9 +798,10 @@ public class CustomersController : ControllerBase
             id = d.id,
             cust_id = d.cust_id,
             contact_name = d.contact_name,
-            contact_email = d.contact_email,
-            contact_tel = d.contact_tel,
+            contact_email = d.contact_email ?? "",
+            contact_tel = d.contact_tel ?? "",
             contact_tel_office = d.contact_tel_office,
+            contact_position = d.contact_position ?? "",
             point = 0,
             total_point = 0
         });
@@ -823,9 +826,10 @@ public class CustomersController : ControllerBase
         }
 
         if (dto.contact_name != null) d.contact_name = dto.contact_name;
-        if (dto.contact_email != null) d.contact_email = dto.contact_email;
-        if (dto.contact_tel != null) d.contact_tel = dto.contact_tel;
+        if (dto.contact_email != null) d.contact_email = string.IsNullOrWhiteSpace(dto.contact_email) ? null : dto.contact_email;
+        if (dto.contact_tel != null) d.contact_tel = string.IsNullOrWhiteSpace(dto.contact_tel) ? null : dto.contact_tel;
         if (dto.contact_tel_office != null) d.contact_tel_office = dto.contact_tel_office;
+        if (dto.contact_position != null) d.contact_position = dto.contact_position;
 
         d.updated_at = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
@@ -837,6 +841,7 @@ public class CustomersController : ControllerBase
             contact_email = d.contact_email ?? "",
             contact_tel = d.contact_tel ?? "",
             contact_tel_office = d.contact_tel_office ?? "",
+            contact_position = d.contact_position ?? "",
             point = 0,
             total_point = 0
         });
@@ -1614,35 +1619,52 @@ public class CustomerAssignDto
 
 public class ContactCreateDto
 {
-    [Required]
     [StringLength(255)]
-    public string contact_name { get; set; } = null!;
-    
-    [EmailAddress]
+    public string? contact_name { get; set; }
+
+    [OptionalEmailAddress]
     [StringLength(255)]
-    public string contact_email { get; set; } = "";
-    
+    public string? contact_email { get; set; }
+
     [StringLength(255)]
-    public string contact_tel { get; set; } = "";
-    
+    public string? contact_tel { get; set; }
+
     [StringLength(255)]
-    public string contact_tel_office { get; set; } = "";
+    public string? contact_tel_office { get; set; }
+
+    [StringLength(255)]
+    public string? contact_position { get; set; }
 }
 
 public class ContactUpdateDto
 {
     [StringLength(255)]
     public string? contact_name { get; set; }
-    
-    [EmailAddress]
+
+    [OptionalEmailAddress]
     [StringLength(255)]
     public string? contact_email { get; set; }
-    
+
     [StringLength(255)]
     public string? contact_tel { get; set; }
-    
+
     [StringLength(255)]
     public string? contact_tel_office { get; set; }
+
+    [StringLength(255)]
+    public string? contact_position { get; set; }
+}
+
+public sealed class OptionalEmailAddressAttribute : ValidationAttribute
+{
+    private static readonly EmailAddressAttribute EmailAddress = new();
+
+    public override bool IsValid(object? value)
+    {
+        return value is null
+            || value is string text
+            && (string.IsNullOrWhiteSpace(text) || EmailAddress.IsValid(text));
+    }
 }
 
 public class DeviceCreateDto

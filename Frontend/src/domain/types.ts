@@ -52,6 +52,7 @@ export interface ContactDetail {
   contact_email: string;
   contact_tel: string;
   contact_tel_office?: string | null;
+  contact_position?: string | null;
   point: number;
   total_point: number;
 }

@@ -63,6 +63,11 @@ public static class DatabaseInitializer
         await EnsureTableColumnAsync(db, "customer", "user_cnt", "INT NULL");
         await EnsureTableColumnAsync(db, "detail_device", "purchase_date", "DATE NULL");
 
+        // Ensure detail.contact_email is nullable
+        await EnsureColumnNullableAsync(db, "detail", "contact_email", "VARCHAR(255) NULL");
+        // Ensure detail.contact_tel is nullable
+        await EnsureColumnNullableAsync(db, "detail", "contact_tel", "VARCHAR(255) NULL");
+
         await EnsureCategoryExistsAsync(db, "Switch");
         await EnsureCategoryExistsAsync(db, "Access Point");
         await EnsureCategoryExistsAsync(db, "Server");
@@ -114,6 +119,59 @@ public static class DatabaseInitializer
 
             await using var alterCommand = connection.CreateCommand();
             alterCommand.CommandText = $"ALTER TABLE `{tableName}` ADD COLUMN `{columnName}` {columnDefinition};";
+            await alterCommand.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static async Task EnsureColumnNullableAsync(
+        TelesaleDbContext db,
+        string tableName,
+        string columnName,
+        string columnDefinition)
+    {
+        var connection = db.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = @"
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = @tableName
+                  AND COLUMN_NAME = @columnName
+                  AND IS_NULLABLE = 'YES';";
+
+            var paramTable = checkCommand.CreateParameter();
+            paramTable.ParameterName = "@tableName";
+            paramTable.Value = tableName;
+            checkCommand.Parameters.Add(paramTable);
+
+            var paramColumn = checkCommand.CreateParameter();
+            paramColumn.ParameterName = "@columnName";
+            paramColumn.Value = columnName;
+            checkCommand.Parameters.Add(paramColumn);
+
+            var isNullable = Convert.ToInt32(await checkCommand.ExecuteScalarAsync()) > 0;
+            if (isNullable)
+            {
+                return;
+            }
+
+            await using var alterCommand = connection.CreateCommand();
+            alterCommand.CommandText = $"ALTER TABLE `{tableName}` MODIFY COLUMN `{columnName}` {columnDefinition};";
             await alterCommand.ExecuteNonQueryAsync();
         }
         finally

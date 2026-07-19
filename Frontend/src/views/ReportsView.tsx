@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { apiService } from "../domain/apiService";
-import type { Customer, User } from "../domain/types";
+import type { Customer } from "../domain/types";
 import {
   AlertTriangle,
   BarChart3,
@@ -11,12 +11,14 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { ForbiddenView } from "./ForbiddenView";
+import { Pagination } from "../components/Pagination";
 
 export type ReportTab = "operation" | "renewal" | "project-detail";
 
 type ReportsViewProps = {
   activeTab?: ReportTab;
   onTabChange?: (tab: ReportTab) => void;
+  onAdvanceCustomer?: (customer: Customer) => void;
 };
 
 type DistributionItem = {
@@ -70,11 +72,14 @@ const ReportDistribution: React.FC<{ title: string; items: DistributionItem[]; e
   );
 };
 
-export const ReportsView: React.FC<ReportsViewProps> = ({ activeTab: controlledActiveTab, onTabChange }) => {
+export const ReportsView: React.FC<ReportsViewProps> = ({
+  activeTab: controlledActiveTab,
+  onTabChange,
+  onAdvanceCustomer
+}) => {
   const [internalActiveTab, setInternalActiveTab] = useState<ReportTab>("operation");
   const activeTab = controlledActiveTab ?? internalActiveTab;
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [projectDetailSummary, setProjectDetailSummary] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isForbidden, setIsForbidden] = useState(false);
@@ -82,6 +87,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ activeTab: controlledA
 
   // Renewal filter
   const [renewalFilterDays, setRenewalFilterDays] = useState(30);
+  const [operationPage, setOperationPage] = useState(1);
+  const [operationPageSize, setOperationPageSize] = useState(25);
 
   const setActiveReportTab = (tab: ReportTab) => {
     if (controlledActiveTab === undefined) {
@@ -95,13 +102,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ activeTab: controlledA
       setIsLoading(true);
       setIsForbidden(false);
       setLoadError(null);
-      const [custs, uList, reportData] = await Promise.all([
+      const [custs, reportData] = await Promise.all([
         apiService.getCustomers(),
-        apiService.getUsers(),
         apiService.getReports()
       ]);
       setCustomers(custs);
-      setUsers(uList);
       setProjectDetailSummary(reportData.projectLedger || []);
     } catch (err: any) {
       if (err.message?.includes("403") || err.message?.includes("Forbidden")) {
@@ -132,11 +137,24 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ activeTab: controlledA
     }));
   }, [customers]);
 
+  const operationTotalPages = Math.ceil(operationReport.length / operationPageSize);
+  const paginatedOperationReport = useMemo(() => {
+    const start = (operationPage - 1) * operationPageSize;
+    return operationReport.slice(start, start + operationPageSize);
+  }, [operationPage, operationPageSize, operationReport]);
+
+  useEffect(() => {
+    if (operationPage > Math.max(operationTotalPages, 1)) {
+      setOperationPage(Math.max(operationTotalPages, 1));
+    }
+  }, [operationPage, operationTotalPages]);
+
   // 4. Renewal summary list
   const renewalSummary = useMemo(() => {
     return customers
       .filter(c => c.is_active && c.renewalDays <= renewalFilterDays)
       .map(c => ({
+        customer: c,
         id: c.id,
         name: c.name,
         business: c.bt_type,
@@ -329,9 +347,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ activeTab: controlledA
                     </thead>
                     <tbody>
                       {operationReport.length > 0 ? (
-                        operationReport.map((item, index) => (
+                        paginatedOperationReport.map((item, index) => (
                           <tr key={item.id}>
-                            <td className="numeric-cell">{index + 1}</td>
+                            <td className="numeric-cell">{(operationPage - 1) * operationPageSize + index + 1}</td>
                             <td>
                               <strong>{item.name}</strong>
                               <span className="subtext">{item.address}</span>
@@ -362,6 +380,17 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ activeTab: controlledA
                     </tbody>
                   </table>
                 </div>
+                <Pagination
+                  page={operationPage}
+                  pageSize={operationPageSize}
+                  totalCount={operationReport.length}
+                  totalPages={operationTotalPages}
+                  onPageChange={setOperationPage}
+                  onPageSizeChange={(size) => {
+                    setOperationPageSize(size);
+                    setOperationPage(1);
+                  }}
+                />
               </section>
             )}
 
@@ -421,11 +450,12 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ activeTab: controlledA
                     <thead>
                       <tr>
                         <th style={{ width: "64px" }}>No.</th>
-                        <th style={{ width: "35%" }}>Customer</th>
-                        <th style={{ width: "20%" }}>Business Type</th>
+                        <th style={{ width: "30%" }}>Customer</th>
+                        <th style={{ width: "18%" }}>Business Type</th>
                         <th className="numeric-cell" style={{ width: "15%" }}>Days Remaining</th>
                         <th style={{ width: "15%" }}>Estimated Expire</th>
                         <th style={{ width: "10%" }}>Status</th>
+                        <th style={{ width: "100px", textAlign: "right" }}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -442,11 +472,21 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ activeTab: controlledA
                             </td>
                             <td className="date-cell">{item.expireDate}</td>
                             <td><span className={`status-badge ${statusClassName(item.status)}`}>{item.status}</span></td>
+                            <td style={{ textAlign: "right" }}>
+                              <button
+                                className="action-pill blue"
+                                onClick={() => onAdvanceCustomer?.(item.customer)}
+                                aria-label={`Open advance data for ${item.name}`}
+                                type="button"
+                              >
+                                Advance
+                              </button>
+                            </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={6}>
+                          <td colSpan={7}>
                             <div className="report-empty-state compact">
                               <Calendar size={18} />
                               <strong>No renewals in range</strong>
