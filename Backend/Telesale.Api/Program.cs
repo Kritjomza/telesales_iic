@@ -1,4 +1,6 @@
+using System.Net;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Telesale.Api.Data;
 using Telesale.Api.Helpers;
@@ -12,6 +14,19 @@ const string ReactDevCorsPolicy = "ReactDevCorsPolicy";
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 2;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+    options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("10.0.0.0"), 8));
+    options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("172.16.0.0"), 12));
+    options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("192.168.0.0"), 16));
+    options.KnownProxies.Add(IPAddress.Loopback);
+    options.KnownProxies.Add(IPAddress.IPv6Loopback);
+});
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -107,27 +122,48 @@ builder.Services.AddScoped<Telesale.Api.Services.ILocalGovernmentImportConfirmSe
 
 var app = builder.Build();
 
-// Initialize the database schema and seed data
-using (var scope = app.Services.CreateScope())
+var initializerSetting = Environment.GetEnvironmentVariable("RUN_DATABASE_INITIALIZER");
+var runInitializer = DatabaseInitializerPolicy.ShouldRun(
+    initializerSetting,
+    app.Environment.IsDevelopment(),
+    out var invalidInitializerSetting);
+
+if (invalidInitializerSetting)
 {
-    var services = scope.ServiceProvider;
-    try
-    {
-        var context = services.GetRequiredService<TelesaleDbContext>();
-        await DatabaseInitializer.InitializeAsync(context);
-    }
-    catch (Exception ex)
-    {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while initializing the database.");
-    }
+    app.Logger.LogWarning(
+        "RUN_DATABASE_INITIALIZER has an invalid value. Database initialization is disabled.");
 }
 
+if (runInitializer)
+{
+    app.Logger.LogWarning("Database initialization is enabled for startup.");
+    using (var scope = app.Services.CreateScope())
+    {
+        var services = scope.ServiceProvider;
+        try
+        {
+            var context = services.GetRequiredService<TelesaleDbContext>();
+            await DatabaseInitializer.InitializeAsync(context);
+        }
+        catch (Exception ex)
+        {
+            var logger = services.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "An error occurred while initializing the database.");
+        }
+    }
+}
+else
+{
+    app.Logger.LogInformation(
+        "Database initialization skipped. Set RUN_DATABASE_INITIALIZER=true to enable it.");
+}
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseForwardedHeaders();
 
 // เปิด CORS ก่อน MapControllers
 app.UseCors(ReactDevCorsPolicy);

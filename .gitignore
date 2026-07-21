@@ -62,3 +62,19 @@ Thumbs.db
 .env
 Backend/Telesale.Api/.env
 Backend/Telesale.Api/TempImports/
+
+# Production deployment secrets and data
+myserver/.env
+*.sql
+*.sql.gz
+**/mysql/data/
+**/maria/data/
+**/TempImports/
+**/publish/
+backups/
+dumps/
+*.pem
+*.key
+*.pfx
+*.crt
+*.cer

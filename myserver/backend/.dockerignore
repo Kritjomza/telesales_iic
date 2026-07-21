@@ -1,0 +1,17 @@
+**/bin/
+**/obj/
+**/TestResults/
+**/coverage/
+**/publish/
+**/.env
+**/.env.*
+!**/.env.example
+**/logs/
+**/*.log
+**/*.pem
+**/*.key
+**/*.pfx
+**/.git/
+**/.vs/
+**/.idea/
+**/.vscode/

@@ -424,15 +424,7 @@ public class PermissionTests
         Assert.IsType<ForbidResult>(context.Result);
     }
 
-    [Fact]
-    public async Task DumpDbUsers()
+    [Fact(Skip = "Manual live-database diagnostic is disabled in automated tests.")]
+    public void DumpDbUsers()
     {
-        var options = new DbContextOptionsBuilder<TelesaleDbContext>()
-            .UseMySql("Server=127.0.0.1;Port=3306;Database=sale;User=sale;Password=1234;", ServerVersion.AutoDetect("Server=127.0.0.1;Port=3306;Database=sale;User=sale;Password=1234;"))
-            .Options;
-        using var db = new TelesaleDbContext(options);
-        var usersList = await db.users.ToListAsync();
-        var message = string.Join("\n", usersList.Select(u => $"ID: {u.id}, User: {u.username}, Role: {u.roles}, Active: {u.is_active}"));
-        throw new Exception("DATABASE_USERS:\n" + message);
-    }
-}
+    }}

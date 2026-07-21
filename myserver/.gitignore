@@ -1,0 +1,10 @@
+.env
+*.sql
+*.sql.gz
+backups/
+mysql/data/
+maria/data/
+certificates/
+*.pem
+*.key
+*.pfx
