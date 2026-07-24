@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Database, Plus, Pencil, Trash2, Search, Upload } from "lucide-react";
-import { apiService } from "../domain/apiService";
+import { apiService, ApiError } from "../domain/apiService";
 import type { Brand, Product, AntivirusPrice, Category, Competitor, Profile, User } from "../domain/types";
 import { Drawer } from "../components/Drawer";
 import { ForbiddenView } from "./ForbiddenView";
-import { canWriteMasterData, canDeleteMasterData } from "../domain/permissions";
+import { canWriteMasterData, canDeleteMasterData, canManageUsers, canManageUserTarget, normalizeRole } from "../domain/permissions";
 import { ImportMasterDataModal } from "../components/ImportMasterDataModal";
 
 export type MasterTableType = 
@@ -41,6 +41,9 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
   const [activeItem, setActiveItem] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isForbidden, setIsForbidden] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+  const [formError, setFormError] = useState("" );
 
   // Sync data when table type changes
   useEffect(() => {
@@ -184,6 +187,31 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
     if (formObj.end) formObj.end = Number(formObj.end);
 
     try {
+      if (tableType === "users") {
+        setIsSaving(true);
+        setFormError("");
+        const password = String(formObj.password || "");
+        const userPayload: any = {
+          name: String(formObj.name || "").trim(),
+          username: String(formObj.username || "").trim(),
+          email: String(formObj.email || "").trim(),
+          role: String(formObj.role || ""),
+          tel: String(formObj.tel || "").trim(),
+          position: String(formObj.position || "").trim(),
+          isActive: formData.has("isActive")
+        };
+        if (!activeItem || password.trim()) userPayload.password = password;
+        if (activeItem) {
+          await apiService.updateUser(activeItem.id, userPayload);
+          showToast("User updated successfully", "success");
+        } else {
+          await apiService.addUser(userPayload);
+          showToast("User added successfully", "success");
+        }
+        await loadTableData();
+        setIsOpen(false);
+        return;
+      }
       if (activeItem) {
         // Edit mode
         switch (tableType) {
@@ -205,9 +233,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
           case "categories":
             await apiService.updateCategory(activeItem.id, formObj.name);
             break;
-          case "users":
-            showToast("User updates must be performed in backend", "info");
-            break;
+
           case "competitors":
             await apiService.updateCompetitor(activeItem.id, formObj);
             break;
@@ -234,9 +260,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
           case "categories":
             await apiService.addCategory(formObj.name);
             break;
-          case "users":
-            showToast("User creation must be performed in backend", "info");
-            break;
+
           case "competitors":
             await apiService.addCompetitor(formObj);
             break;
@@ -246,29 +270,36 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
       loadTableData();
       setIsOpen(false);
     } catch (err) {
-      showToast("Operation failed", "error");
+      const message = err instanceof ApiError ? err.message : "Operation failed";
+      if (tableType === "users") setFormError(message);
+      showToast(message, "error");
+    } finally {
+      if (tableType === "users") setIsSaving(false);
     }
   };
 
   // Handle Delete
   const handleDelete = async (id: number) => {
-    if (window.confirm("Are you sure you want to delete this record?")) {
-      try {
-        switch (tableType) {
-          case "profiles": await apiService.deleteProfile(id); break;
-          case "antiviruspricelist": await apiService.deleteAntivirusPrice(id); break;
-          case "products": await apiService.deleteProduct(id); break;
-          case "brands": await apiService.deleteBrand(id); break;
-          case "businesstypes": await apiService.deleteBusinessType(id); break;
-          case "categories": await apiService.deleteCategory(id); break;
-          case "users": showToast("User deletion must be performed in backend", "info"); return;
-          case "competitors": await apiService.deleteCompetitor(id); break;
-        }
-        loadTableData();
-        showToast("Record deleted successfully", "success");
-      } catch (err) {
-        showToast("Failed to delete record", "error");
+    if (!window.confirm("Are you sure you want to delete this record?")) return;
+    try {
+      if (tableType === "users") setDeletingUserId(id);
+      switch (tableType) {
+        case "profiles": await apiService.deleteProfile(id); break;
+        case "antiviruspricelist": await apiService.deleteAntivirusPrice(id); break;
+        case "products": await apiService.deleteProduct(id); break;
+        case "brands": await apiService.deleteBrand(id); break;
+        case "businesstypes": await apiService.deleteBusinessType(id); break;
+        case "categories": await apiService.deleteCategory(id); break;
+        case "users": await apiService.deleteUser(id); break;
+        case "competitors": await apiService.deleteCompetitor(id); break;
       }
+      await loadTableData();
+      showToast(tableType === "users" ? "User deleted successfully" : "Record deleted successfully", "success");
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to delete record";
+      showToast(message, "error");
+    } finally {
+      if (tableType === "users") setDeletingUserId(null);
     }
   };
 
@@ -284,7 +315,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
           <h1>Manage {getTableTitle()}</h1>
           <span>{getTableDescription()}</span>
         </div>
-        {tableType !== "users" && canWriteMasterData(userRole, tableType) && (
+        {((tableType === "users" && canManageUsers(userRole)) || (tableType !== "users" && canWriteMasterData(userRole, tableType))) && (
           <div className="topbar-actions master-data-actions">
             {(tableType === "profiles" || tableType === "antiviruspricelist") && (
               <button
@@ -296,9 +327,9 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                 Import
               </button>
             )}
-            <button className="primary-button" onClick={() => { setActiveItem(null); setIsOpen(true); }} type="button">
+            <button className="primary-button" onClick={() => { setActiveItem(null); setFormError(""); setIsOpen(true); }} type="button">
               <Plus size={15} />
-              Add Record
+              {tableType === "users" ? "Add User" : "Add Record"}
             </button>
           </div>
         )}
@@ -418,7 +449,8 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                     <th style={{ width: "20%" }}>Email</th>
                     <th style={{ width: "15%" }}>Tel</th>
                     <th style={{ width: "15%" }}>Position</th>
-                    <th style={{ width: "15%" }}>Line Token</th>
+                    <th style={{ width: "10%" }}>Status</th>
+                    <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
                   </tr>
                 )}
                 {tableType === "competitors" && (
@@ -521,7 +553,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                           <td>{item.email}</td>
                           <td>{item.tel || "-"}</td>
                           <td>{item.position || "-"}</td>
-                          <td><code>{item.linetoken || "-"}</code></td>
+                          <td><span className={`status-badge ${item.is_active ? "success" : "neutral"}`}>{item.is_active ? "Active" : "Inactive"}</span></td>
                         </>
                       )}
                       {tableType === "competitors" && (
@@ -534,6 +566,22 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                         </>
                       )}
 
+                      {tableType === "users" && (
+                        <td style={{ textAlign: "right" }}>
+                          <div className="row-actions">
+                            {canManageUserTarget(userRole, item.roles) && (
+                              <>
+                                <button onClick={() => { setActiveItem(item); setFormError(""); setIsOpen(true); }} aria-label="Edit user" type="button" disabled={deletingUserId !== null || isSaving}>
+                                  <Pencil size={13} />
+                                </button>
+                                <button className="delete-btn" onClick={() => handleDelete(item.id)} aria-label="Delete user" type="button" disabled={deletingUserId !== null || isSaving}>
+                                  <Trash2 size={13} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      )}
                       {tableType !== "users" && (
                         <td style={{ textAlign: "right" }}>
                           <div className="row-actions">
@@ -696,6 +744,50 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
             </>
           )}
 
+          {tableType === "users" && (
+            <>
+              {formError && <div className="form-error" role="alert">{formError}</div>}
+              <div className="form-group">
+                <label htmlFor="name_user">Name *</label>
+                <input id="name_user" name="name" type="text" defaultValue={activeItem?.name || ""} maxLength={255} required />
+              </div>
+              <div className="form-group">
+                <label htmlFor="username_user">Username *</label>
+                <input id="username_user" name="username" type="text" defaultValue={activeItem?.username || ""} maxLength={255} required />
+              </div>
+              <div className="form-group">
+                <label htmlFor="email_user">Email *</label>
+                <input id="email_user" name="email" type="email" defaultValue={activeItem?.email || ""} maxLength={255} required />
+              </div>
+              <div className="form-group">
+                <label htmlFor="password_user">{activeItem ? "Password" : "Password *"}</label>
+                <input id="password_user" name="password" type="password" defaultValue="" minLength={8} maxLength={72} required={!activeItem} autoComplete="new-password" />
+              </div>
+              <div className="form-group">
+                <label htmlFor="role_user">Role *</label>
+                <select id="role_user" name="role" defaultValue={activeItem?.roles || "Sale"} required>
+                  {normalizeRole(userRole) === "Super Admin" && <option value="Super Admin">Super Admin</option>}
+                  <option value="Admin">Admin</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Tele Sale">Tele Sale</option>
+                  <option value="Sale">Sale</option>
+                </select>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="tel_user">Tel</label>
+                  <input id="tel_user" name="tel" type="text" defaultValue={activeItem?.tel || ""} maxLength={255} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="position_user">Position</label>
+                  <input id="position_user" name="position" type="text" defaultValue={activeItem?.position || ""} maxLength={255} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label><input name="isActive" type="checkbox" defaultChecked={activeItem ? activeItem.is_active !== false : true} /> Active</label>
+              </div>
+            </>
+          )}
           {tableType === "competitors" && (
             <>
               <div className="form-group">
@@ -724,8 +816,8 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
           )}
 
           <footer className="form-actions">
-            <button className="ghost-button" type="button" onClick={() => setIsOpen(false)}>Cancel</button>
-            <button className="primary-button" type="submit">Save Record</button>
+            <button className="ghost-button" type="button" onClick={() => setIsOpen(false)} disabled={isSaving}>Cancel</button>
+            <button className="primary-button" type="submit" disabled={isSaving}>{isSaving ? "Saving..." : tableType === "users" ? "Save User" : "Save Record"}</button>
           </footer>
         </form>
       </Drawer>

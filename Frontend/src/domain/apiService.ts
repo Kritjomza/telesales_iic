@@ -1,5 +1,7 @@
 import type {
   User,
+  CreateUserInput,
+  UpdateUserInput,
   Customer,
   ContactDetail,
   DetailDevice,
@@ -113,6 +115,27 @@ export const apiService = {
   // Users
   async getUsers(): Promise<User[]> {
     return request<User[]>("/users");
+  },
+
+  async addUser(input: CreateUserInput): Promise<User> {
+    return request<User>("/users", {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+  },
+
+  async updateUser(id: number, input: UpdateUserInput): Promise<User> {
+    return request<User>(`/users/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input)
+    });
+  },
+
+  async deleteUser(id: number): Promise<boolean> {
+    return request<boolean>(`/users/${id}`, {
+      method: "DELETE",
+      skipForbiddenRedirect: true
+    } as any);
   },
 
   // Customers

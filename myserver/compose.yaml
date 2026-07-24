@@ -81,8 +81,10 @@ services:
     environment:
       PMA_HOST: database
       PMA_PORT: 3306
+      UPLOAD_LIMIT: 100M
     ports:
       - "127.0.0.1:${PHPMYADMIN_PORT:-8890}:80"
+      # - "${PHPMYADMIN_PORT:-8890}:80"
     networks:
       - app-network
       - egress-network

@@ -130,3 +130,15 @@ export function canWriteMasterData(role: string | null | undefined, tableType: s
   }
   return false;
 }
+
+
+export function canManageUsers(role: string | null | undefined): boolean {
+  const normalized = normalizeRole(role);
+  return normalized === "Admin" || normalized === "Super Admin";
+}
+
+export function canManageUserTarget(actorRole: string | null | undefined, targetRole: string | null | undefined): boolean {
+  const actor = normalizeRole(actorRole);
+  const target = normalizeRole(targetRole);
+  return actor === "Super Admin" || (actor === "Admin" && target !== "Super Admin");
+}
