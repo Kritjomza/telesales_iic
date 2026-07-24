@@ -41,6 +41,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
   const [activeItem, setActiveItem] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isForbidden, setIsForbidden] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Sync data when table type changes
   useEffect(() => {
@@ -166,6 +167,8 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
   // Handle Save
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSaving) return;
+    setIsSaving(true);
     const formData = new FormData(e.currentTarget);
     const formObj: any = {};
     formData.forEach((value, key) => {
@@ -206,7 +209,9 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
             await apiService.updateCategory(activeItem.id, formObj.name);
             break;
           case "users":
-            showToast("User updates must be performed in backend", "info");
+            if (!formObj.password) delete formObj.password;
+            formObj.isActive = formObj.isActive === "on";
+            await apiService.updateUser(activeItem.id, formObj);
             break;
           case "competitors":
             await apiService.updateCompetitor(activeItem.id, formObj);
@@ -235,7 +240,8 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
             await apiService.addCategory(formObj.name);
             break;
           case "users":
-            showToast("User creation must be performed in backend", "info");
+            formObj.isActive = formObj.isActive === "on";
+            await apiService.addUser(formObj);
             break;
           case "competitors":
             await apiService.addCompetitor(formObj);
@@ -245,8 +251,10 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
       }
       loadTableData();
       setIsOpen(false);
-    } catch (err) {
-      showToast("Operation failed", "error");
+    } catch (err: any) {
+      showToast(err?.message || "Operation failed", "error");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -261,13 +269,13 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
           case "brands": await apiService.deleteBrand(id); break;
           case "businesstypes": await apiService.deleteBusinessType(id); break;
           case "categories": await apiService.deleteCategory(id); break;
-          case "users": showToast("User deletion must be performed in backend", "info"); return;
+          case "users": await apiService.deleteUser(id); break;
           case "competitors": await apiService.deleteCompetitor(id); break;
         }
         loadTableData();
         showToast("Record deleted successfully", "success");
-      } catch (err) {
-        showToast("Failed to delete record", "error");
+      } catch (err: any) {
+        showToast(err?.message || "Failed to delete record", "error");
       }
     }
   };
@@ -284,7 +292,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
           <h1>Manage {getTableTitle()}</h1>
           <span>{getTableDescription()}</span>
         </div>
-        {tableType !== "users" && canWriteMasterData(userRole, tableType) && (
+        {canWriteMasterData(userRole, tableType) && (
           <div className="topbar-actions master-data-actions">
             {(tableType === "profiles" || tableType === "antiviruspricelist") && (
               <button
@@ -298,7 +306,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
             )}
             <button className="primary-button" onClick={() => { setActiveItem(null); setIsOpen(true); }} type="button">
               <Plus size={15} />
-              Add Record
+              {tableType === "users" ? "Add User" : "Add Record"}
             </button>
           </div>
         )}
@@ -418,7 +426,8 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                     <th style={{ width: "20%" }}>Email</th>
                     <th style={{ width: "15%" }}>Tel</th>
                     <th style={{ width: "15%" }}>Position</th>
-                    <th style={{ width: "15%" }}>Line Token</th>
+                    <th style={{ width: "10%" }}>Active</th>
+                    <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
                   </tr>
                 )}
                 {tableType === "competitors" && (
@@ -521,7 +530,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                           <td>{item.email}</td>
                           <td>{item.tel || "-"}</td>
                           <td>{item.position || "-"}</td>
-                          <td><code>{item.linetoken || "-"}</code></td>
+                          <td>{item.isActive !== false ? "Yes" : "No"}</td>
                         </>
                       )}
                       {tableType === "competitors" && (
@@ -534,8 +543,16 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                         </>
                       )}
 
-                      {tableType !== "users" && (
-                        <td style={{ textAlign: "right" }}>
+                      <td style={{ textAlign: "right" }}>
+                        {tableType === "users" ? (
+                          <div className="row-actions">
+                            {(userRole === "Super Admin" || (userRole === "Admin" && item.roles !== "Super Admin")) && <>
+                              <button onClick={() => { setActiveItem(item); setIsOpen(true); }} aria-label={`Edit ${item.name}`} type="button"><Pencil size={13} /></button>
+                              <button className="delete-btn" onClick={() => handleDelete(item.id)} aria-label={`Delete ${item.name}`} type="button"><Trash2 size={13} /></button>
+                            </>}
+                          </div>
+                        ) : (
+                          <>
                           <div className="row-actions">
                             {canWriteMasterData(userRole, tableType) && (
                               <button onClick={() => { setActiveItem(item); setIsOpen(true); }} aria-label="Edit record" type="button">
@@ -548,8 +565,9 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
                               </button>
                             )}
                           </div>
-                        </td>
-                      )}
+                          </>
+                        )}
+                      </td>
                     </tr>
                   ))
                 ) : (
@@ -577,6 +595,21 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
         onClose={() => setIsOpen(false)}
       >
         <form onSubmit={handleSave} className="corporate-form">
+          {tableType === "users" && (
+            <>
+              <div className="form-group"><label htmlFor="user_name">Name *</label><input id="user_name" name="name" defaultValue={activeItem?.name || ""} required /></div>
+              <div className="form-group"><label htmlFor="user_username">Username *</label><input id="user_username" name="username" defaultValue={activeItem?.username || ""} required /></div>
+              <div className="form-group"><label htmlFor="user_email">Email *</label><input id="user_email" name="email" type="email" defaultValue={activeItem?.email || ""} required /></div>
+              <div className="form-group"><label htmlFor="user_password">Password {activeItem ? "(leave blank to keep current)" : "*"}</label><input id="user_password" name="password" type="password" required={!activeItem} minLength={8} /></div>
+              <div className="form-group"><label htmlFor="user_role">Role *</label><select id="user_role" name="role" defaultValue={activeItem?.roles || "Sale"}>
+                {userRole === "Super Admin" && <option value="Super Admin">Super Admin</option>}
+                <option value="Admin">Admin</option><option value="Manager">Manager</option><option value="Tele Sale">Tele Sale</option><option value="Sale">Sale</option>
+              </select></div>
+              <div className="form-group"><label htmlFor="user_tel">Tel</label><input id="user_tel" name="tel" defaultValue={activeItem?.tel || ""} /></div>
+              <div className="form-group"><label htmlFor="user_position">Position</label><input id="user_position" name="position" defaultValue={activeItem?.position || ""} /></div>
+              <label><input name="isActive" type="checkbox" defaultChecked={activeItem?.isActive !== false} /> Active</label>
+            </>
+          )}
           {tableType === "profiles" && (
             <>
               <div className="form-group">
@@ -725,7 +758,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({ tableType, userR
 
           <footer className="form-actions">
             <button className="ghost-button" type="button" onClick={() => setIsOpen(false)}>Cancel</button>
-            <button className="primary-button" type="submit">Save Record</button>
+            <button className="primary-button" type="submit" disabled={isSaving}>{isSaving ? "Saving..." : "Save Record"}</button>
           </footer>
         </form>
       </Drawer>
