@@ -6,8 +6,11 @@ export interface User {
   roles: "Admin" | "Super Admin" | "Manager" | "Supervisor" | "Sale" | "Tele Sale" | "Tele sale" | "Viewer";
   tel?: string;
   position?: string;
-  linetoken?: string;
+  isActive?: boolean;
 }
+
+export type CreateUserInput = Omit<User, "id" | "roles"> & { role: User["roles"]; password: string };
+export type UpdateUserInput = Omit<User, "id" | "roles"> & { role: User["roles"]; password?: string };
 
 export const CUSTOMER_CALL_STATUS = {
   CALLED: "Called",
